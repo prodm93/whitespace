@@ -1,0 +1,323 @@
+# Model Registry — council role → ranked model preference lists
+#
+# Each role maps to a ranked list of models. The router tries the first model;
+# on failure it falls back to the next. Per-model pricing enables the cost
+# tracker to estimate credit burn without relying on AWS budget alerts.
+#
+# Bedrock model IDs are used in SaaS mode. In BYOK mode, the router maps
+# these to direct provider API calls using the provider field.
+#
+# Pricing is in USD per 1M tokens as of June 2026. Update when pricing changes.
+# The router divides by 1_000_000 to get per-token cost at runtime.
+
+# ---------------------------------------------------------------------------
+# Gap Analysis Council — breadth over depth, cheaper models preferred
+# ---------------------------------------------------------------------------
+
+gap_ideator_1:
+  models:
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+    - model_id: "deepseek.deepseek-v3-2-v1:0"
+      provider: deepseek
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.50
+        output_per_1m: 2.00
+
+gap_ideator_2:
+  models:
+    - model_id: "zai.glm-5"
+      provider: zhipu
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 1.00
+        output_per_1m: 3.20
+    - model_id: "moonshot.kimi-k2-thinking"
+      provider: moonshot
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.60
+        output_per_1m: 2.50
+    - model_id: "amazon.nova-2-micro-v1:0"
+      provider: amazon
+      timeout_seconds: 60
+      retries: 2
+      pricing:
+        input_per_1m: 0.10
+        output_per_1m: 0.10
+
+gap_ideator_3:
+  models:
+    - model_id: "moonshot.kimi-k2-thinking"
+      provider: moonshot
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.60
+        output_per_1m: 2.50
+    - model_id: "zai.glm-5"
+      provider: zhipu
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 1.00
+        output_per_1m: 3.20
+    - model_id: "deepseek.deepseek-v3-2-v1:0"
+      provider: deepseek
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.50
+        output_per_1m: 2.00
+
+gap_critic:
+  models:
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+
+gap_synthesiser:
+  models:
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+
+# ---------------------------------------------------------------------------
+# Ideation Council — depth and quality, frontier models preferred
+# ---------------------------------------------------------------------------
+
+idea_ideator_technical:
+  models:
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+
+idea_ideator_commercial:
+  models:
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+
+idea_ideator_crossdomain:
+  models:
+    - model_id: "moonshot.kimi-k2-thinking"
+      provider: moonshot
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 0.60
+        output_per_1m: 2.50
+    - model_id: "zai.glm-5"
+      provider: zhipu
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 1.00
+        output_per_1m: 3.20
+    - model_id: "deepseek.deepseek-v3-2-v1:0"
+      provider: deepseek
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 0.50
+        output_per_1m: 2.00
+
+idea_critic:
+  models:
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+
+idea_synthesiser:
+  models:
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+
+prior_art_checker:
+  models:
+    - model_id: "deepseek.deepseek-v3-2-v1:0"
+      provider: deepseek
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.50
+        output_per_1m: 2.00
+    - model_id: "zai.glm-5"
+      provider: zhipu
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 1.00
+        output_per_1m: 3.20
+
+# ---------------------------------------------------------------------------
+# Utility roles — cheap models for extraction and formatting
+# ---------------------------------------------------------------------------
+
+profile_extractor:
+  models:
+    - model_id: "zai.glm-5"
+      provider: zhipu
+      timeout_seconds: 60
+      retries: 3
+      pricing:
+        input_per_1m: 1.00
+        output_per_1m: 3.20
+    - model_id: "amazon.nova-2-micro-v1:0"
+      provider: amazon
+      timeout_seconds: 60
+      retries: 3
+      pricing:
+        input_per_1m: 0.10
+        output_per_1m: 0.10
+
+ontology_inference:
+  models:
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 120
+      retries: 3
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 120
+      retries: 3
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+
+search_query_generator:
+  models:
+    - model_id: "amazon.nova-2-micro-v1:0"
+      provider: amazon
+      timeout_seconds: 30
+      retries: 2
+      pricing:
+        input_per_1m: 0.10
+        output_per_1m: 0.10
+    - model_id: "zai.glm-5"
+      provider: zhipu
+      timeout_seconds: 30
+      retries: 2
+      pricing:
+        input_per_1m: 1.00
+        output_per_1m: 3.20
+
+generator:
+  models:
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+
+retrieval_planner:
+  models:
+    - model_id: "zai.glm-5"
+      provider: zhipu
+      timeout_seconds: 30
+      retries: 3
+      pricing:
+        input_per_1m: 1.00
+        output_per_1m: 3.20
+    - model_id: "amazon.nova-2-micro-v1:0"
+      provider: amazon
+      timeout_seconds: 30
+      retries: 3
+      pricing:
+        input_per_1m: 0.10
+        output_per_1m: 0.10
