@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+.terraform.lock.hcl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Project docs (private)
+CLAUDE.md
+SKILL.md
+BUILD_ORDER.md
+_reference/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Lambda deployment artifacts
+deploy/aws/lambda/*.zip
+deploy/aws/lambda_build/
+
+# Next.js artefacts
+.next/
+frontend/.next/

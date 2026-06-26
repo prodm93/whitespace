@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "whitespace"
+version = "0.1.0"
+description = "Adversarial multi-model patent analysis and ideation engine"
+requires-python = ">=3.11"
+dependencies = [
+    # Orchestration
+    "langgraph>=0.4,<1",
+    # Knowledge graph
+    "graphiti-core>=0.6,<1",
+    "neo4j>=5.20,<6",
+    # Schemas & config
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.3,<3",
+    # API
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30,<1",
+    "python-multipart>=0.0.9",
+    # LLM providers
+    "httpx>=0.27,<1",
+    "openai>=1.30,<2",
+    # Document loaders
+    "pdfplumber>=0.11,<1",
+    "python-docx>=1.1,<2",
+    "openpyxl>=3.1,<4",
+    "pandas>=2.2,<3",
+    # Search
+    "duckduckgo-search>=6,<8",
+    "exa-py>=1.1,<2",
+    "firecrawl-py>=1.5,<3",
+    # Model registry
+    "pyyaml>=6,<7",
+    # Observability
+    "langsmith>=0.1.100,<1",
+    # Auth (SaaS JWT validation)
+    "PyJWT[crypto]>=2.8,<3",
+]
+
+[project.optional-dependencies]
+saas = [
+    "boto3>=1.34,<2",
+]
+dev = [
+    "ruff>=0.5,<1",
+    "mypy>=1.10,<2",
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.23,<1",
+    "types-pyyaml>=6,<7",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/whitespace"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [
+  "_reference",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
