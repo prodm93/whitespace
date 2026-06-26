@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import uuid
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from whitespace.domain import JobResult, JobStatus
 from whitespace.queue.base import JobQueue

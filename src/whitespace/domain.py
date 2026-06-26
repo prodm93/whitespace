@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -42,7 +42,7 @@ class IngestResult(BaseModel):
     )
 
 
-class CouncilOutcome(str, Enum):
+class CouncilOutcome(StrEnum):
     FULL = "full"
     PARTIAL = "partial"
     FAILED = "failed"
