@@ -13,8 +13,8 @@ import logging
 
 from graphiti_core.nodes import EntityNode
 from pydantic import BaseModel
-
 from whitespace.schemas._compiler_helpers import compile_model
+
 from whitespace.schemas.ontology import OntologyDefinition
 from whitespace.schemas.ontology_name_sanitiser import sanitise_class_name
 
