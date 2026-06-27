@@ -10,9 +10,8 @@ class CandidateIdea(BaseModel):
     framing: str = Field(
         ...,
         description=(
-            "Perspective: technical_feasibility, "
-            "commercial_value, or cross_domain_transfer"
-        )
+            "Perspective: technical_feasibility, commercial_value, or cross_domain_transfer"
+        ),
     )
 
 
