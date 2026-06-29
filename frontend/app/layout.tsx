@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AppShell from "@/components/layout/AppShell";
+import { CredentialsProvider } from "@/context/CredentialsContext";
 
 export const metadata: Metadata = {
   title: "WhiteSpace",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AppShell>{children}</AppShell>
+        <CredentialsProvider>
+          <AppShell>{children}</AppShell>
+        </CredentialsProvider>
       </body>
     </html>
   );
