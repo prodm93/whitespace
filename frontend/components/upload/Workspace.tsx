@@ -1,14 +1,20 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { UploadedFile } from "@/types";
+import type {
+  GapAnalysisResponse,
+  JobResult,
+  UnmetNeed,
+  UploadedFile,
+} from "@/types";
 import { useCredentials } from "@/context/CredentialsContext";
-import { triggerIngest } from "@/lib/api";
+import { triggerGapAnalysis, triggerIngest } from "@/lib/api";
 import DropZone, { nextId } from "./DropZone";
 import SearchPanel from "@/components/search/SearchPanel";
 import JobProgress from "@/components/jobs/JobProgress";
+import GapResults from "@/components/gaps/GapResults";
 
-type Phase = "input" | "ingesting";
+type Phase = "input" | "ingesting" | "gap-running" | "gap-results";
 
 function toUploadedFile(file: File): UploadedFile {
   return { id: nextId(), file, name: file.name, size: file.size };
@@ -26,6 +32,8 @@ export default function Workspace() {
   const [error, setError] = useState("");
   const [phase, setPhase] = useState<Phase>("input");
   const [jobId, setJobId] = useState("");
+  const [needs, setNeeds] = useState<UnmetNeed[]>([]);
+  const [ideateSubmitting, setIdeateSubmitting] = useState(false);
 
   const addProfile = useCallback((files: File[]) => {
     setProfileFiles((prev) => [...prev, ...files.map(toUploadedFile)]);
@@ -69,13 +77,41 @@ export default function Workspace() {
   }, [byok, domain, cpcClass, profileFiles, domainFiles]);
 
   const handleIngestComplete = useCallback(async () => {
-    setPhase("input");
+    try {
+      const gapJob = await triggerGapAnalysis(byok);
+      setJobId(gapJob.job_id);
+      setPhase("gap-running");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start gap analysis.");
+      setPhase("input");
+    }
+  }, [byok]);
+
+  const handleGapComplete = useCallback((result: JobResult) => {
+    const data = result.result as GapAnalysisResponse | null;
+    setNeeds(data?.needs ?? []);
+    setPhase("gap-results");
+  }, []);
+
+  const handleIdeate = useCallback(async (selectedTitles: string[]) => {
+    setIdeateSubmitting(true);
+    setIdeateSubmitting(false);
   }, []);
 
   const handleRetryIngest = useCallback(() => {
     setPhase("input");
     setJobId("");
   }, []);
+
+  const handleRetryGaps = useCallback(async () => {
+    try {
+      const gapJob = await triggerGapAnalysis(byok);
+      setJobId(gapJob.job_id);
+      setPhase("gap-running");
+    } catch {
+      setPhase("input");
+    }
+  }, [byok]);
 
   if (phase === "ingesting") {
     return (
@@ -84,6 +120,27 @@ export default function Workspace() {
         jobType="ingest"
         onComplete={handleIngestComplete}
         onRetry={handleRetryIngest}
+      />
+    );
+  }
+
+  if (phase === "gap-running") {
+    return (
+      <JobProgress
+        jobId={jobId}
+        jobType="gaps"
+        onComplete={handleGapComplete}
+        onRetry={handleRetryGaps}
+      />
+    );
+  }
+
+  if (phase === "gap-results") {
+    return (
+      <GapResults
+        needs={needs}
+        onIdeate={handleIdeate}
+        submitting={ideateSubmitting}
       />
     );
   }
