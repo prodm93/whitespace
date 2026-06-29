@@ -1,0 +1,39 @@
+:root {
+  /* Background gradient stops */
+  --bg-top: #08091a;
+  --bg-mid: #12102a;
+  --bg-bottom: #2a1028;
+
+  /* Accent */
+  --accent: #8a4570;
+  --accent-dim: rgba(138, 69, 112, 0.4);
+  --accent-glow: rgba(138, 69, 112, 0.15);
+
+  /* Text */
+  --text-primary: #ede8e0;
+  --text-secondary: #6b5f8a;
+  --text-muted: rgba(107, 95, 138, 0.5);
+
+  /* Decorative */
+  --stroke-cream: rgba(237, 232, 224, 0.25);
+  --stroke-lavender: rgba(107, 95, 138, 0.3);
+
+  /* Spacing */
+  --gutter: 24px;
+  --margin: 24px;
+
+  /* Type scale */
+  --text-hero: clamp(64px, 10vw, 96px);
+  --text-h1: clamp(32px, 5vw, 48px);
+  --text-h2: clamp(24px, 3vw, 32px);
+  --text-body: clamp(16px, 1.2vw, 18px);
+  --text-caption: clamp(12px, 1vw, 14px);
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+
+  /* Transitions */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
