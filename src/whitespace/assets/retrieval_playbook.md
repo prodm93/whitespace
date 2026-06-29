@@ -176,6 +176,13 @@ or domain the user mentions. Be specific: if the user says "my
 background in computational chemistry and signal processing", pass
 `["computational chemistry", "signal processing"]`.
 
+**Implicit profile references.** When the query says "my profile" or
+"my background" without naming specific skills, extract terms from the
+`ProfessionalProfile`'s `hard_skills` and `domain_knowledge` fields
+only. Do not infer skills the user has not explicitly stated in their
+profile documents — inferred capabilities produce false graph
+neighbourhoods that degrade retrieval quality.
+
 **Signals to pick this:**
 1. The query references the user's skills, expertise, background,
    or professional profile.
@@ -379,6 +386,48 @@ the most specific one. Specificity order (most → least):
 `citation_chain` ≈ `entity_focused` > `comparison` > `skill_matching`
 > `gap_analysis`. Use `gap_analysis` only as a true last resort when
 no more specific strategy clearly applies.
+
+---
+
+## Common misrouting traps
+
+These queries look like they fit one strategy but actually belong to
+another. The named entity or comparative language is a red herring —
+the underlying intent determines the correct route.
+
+**Entity name present, but intent is analytical:**
+- `"what are CRISPR-Cas9's limitations?"` — names a focal entity,
+  but the focus is limitations, not facts about the entity.
+  ✗ `entity_focused` · ✓ `gap_analysis`
+- `"tell me about the gaps in Tesla's patent portfolio"` — "tell me
+  about" and a named entity suggest `entity_focused`, but the
+  operative word is "gaps".
+  ✗ `entity_focused` · ✓ `gap_analysis`
+
+**Evolution/lineage language, but subject is a category:**
+- `"how has battery technology evolved?"` — "evolved" suggests
+  `citation_chain`, but "battery technology" is a category, not a
+  focal entity. There is no single node to start traversal from.
+  ✗ `citation_chain` · ✓ `gap_analysis`
+
+**Two entities named, but intent is skill matching:**
+- `"I have experience in both electrochemistry and polymer science —
+  compare the opportunities"` — two named domains and the word
+  "compare" suggest `comparison`, but the user is asking where their
+  skills fit, not contrasting two patents or technologies.
+  ✗ `comparison` · ✓ `skill_matching`
+
+**Comparative language, but only one entity is the subject:**
+- `"what does the Samsung patent say about Tesla's approach?"` — two
+  entity names and an implicit comparison, but the query asks what
+  one patent says — it is a facts-about-X query.
+  ✗ `comparison` · ✓ `entity_focused`
+
+**Named entity with citation language, but intent is gap analysis:**
+- `"what hasn't been addressed since US11234567?"` — names a patent
+  and implies temporal sequence, but the focus is on what remains
+  unsolved, not on what the patent cites or what cites it.
+  ✗ `citation_chain` · ✓ `gap_analysis`
 
 ---
 
