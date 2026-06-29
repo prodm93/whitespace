@@ -3,18 +3,31 @@
 import { useCallback, useState } from "react";
 import type {
   GapAnalysisResponse,
+  IdeationProposal,
+  IdeationResponse,
   JobResult,
   UnmetNeed,
   UploadedFile,
 } from "@/types";
 import { useCredentials } from "@/context/CredentialsContext";
-import { triggerGapAnalysis, triggerIngest } from "@/lib/api";
+import {
+  triggerGapAnalysis,
+  triggerIdeation,
+  triggerIngest,
+} from "@/lib/api";
 import DropZone, { nextId } from "./DropZone";
 import SearchPanel from "@/components/search/SearchPanel";
 import JobProgress from "@/components/jobs/JobProgress";
 import GapResults from "@/components/gaps/GapResults";
+import IdeationResults from "@/components/ideation/IdeationResults";
 
-type Phase = "input" | "ingesting" | "gap-running" | "gap-results";
+type Phase =
+  | "input"
+  | "ingesting"
+  | "gap-running"
+  | "gap-results"
+  | "ideation-running"
+  | "ideation-results";
 
 function toUploadedFile(file: File): UploadedFile {
   return { id: nextId(), file, name: file.name, size: file.size };
@@ -33,6 +46,7 @@ export default function Workspace() {
   const [phase, setPhase] = useState<Phase>("input");
   const [jobId, setJobId] = useState("");
   const [needs, setNeeds] = useState<UnmetNeed[]>([]);
+  const [proposals, setProposals] = useState<IdeationProposal[]>([]);
   const [ideateSubmitting, setIdeateSubmitting] = useState(false);
 
   const addProfile = useCallback((files: File[]) => {
@@ -95,7 +109,21 @@ export default function Workspace() {
 
   const handleIdeate = useCallback(async (selectedTitles: string[]) => {
     setIdeateSubmitting(true);
-    setIdeateSubmitting(false);
+    try {
+      const job = await triggerIdeation(byok, selectedTitles);
+      setJobId(job.job_id);
+      setPhase("ideation-running");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start ideation.");
+    } finally {
+      setIdeateSubmitting(false);
+    }
+  }, [byok]);
+
+  const handleIdeationComplete = useCallback((result: JobResult) => {
+    const data = result.result as IdeationResponse | null;
+    setProposals(data?.proposals ?? []);
+    setPhase("ideation-results");
   }, []);
 
   const handleRetryIngest = useCallback(() => {
@@ -112,6 +140,11 @@ export default function Workspace() {
       setPhase("input");
     }
   }, [byok]);
+
+  const handleRetryIdeation = useCallback(() => {
+    setPhase("gap-results");
+    setJobId("");
+  }, []);
 
   if (phase === "ingesting") {
     return (
@@ -143,6 +176,21 @@ export default function Workspace() {
         submitting={ideateSubmitting}
       />
     );
+  }
+
+  if (phase === "ideation-running") {
+    return (
+      <JobProgress
+        jobId={jobId}
+        jobType="ideation"
+        onComplete={handleIdeationComplete}
+        onRetry={handleRetryIdeation}
+      />
+    );
+  }
+
+  if (phase === "ideation-results") {
+    return <IdeationResults proposals={proposals} />;
   }
 
   return (
