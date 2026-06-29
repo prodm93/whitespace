@@ -6,6 +6,9 @@ import { useCredentials } from "@/context/CredentialsContext";
 import { triggerIngest } from "@/lib/api";
 import DropZone, { nextId } from "./DropZone";
 import SearchPanel from "@/components/search/SearchPanel";
+import JobProgress from "@/components/jobs/JobProgress";
+
+type Phase = "input" | "ingesting";
 
 function toUploadedFile(file: File): UploadedFile {
   return { id: nextId(), file, name: file.name, size: file.size };
@@ -21,6 +24,8 @@ export default function Workspace() {
   const [cpcClass, setCpcClass] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [phase, setPhase] = useState<Phase>("input");
+  const [jobId, setJobId] = useState("");
 
   const addProfile = useCallback((files: File[]) => {
     setProfileFiles((prev) => [...prev, ...files.map(toUploadedFile)]);
@@ -47,19 +52,41 @@ export default function Workspace() {
     }
     setSubmitting(true);
     try {
-      await triggerIngest(
+      const result = await triggerIngest(
         byok,
         domain,
         cpcClass,
         profileFiles.map((f) => f.file),
         domainFiles.map((f) => f.file),
       );
+      setJobId(result.job_id);
+      setPhase("ingesting");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setSubmitting(false);
     }
   }, [byok, domain, cpcClass, profileFiles, domainFiles]);
+
+  const handleIngestComplete = useCallback(async () => {
+    setPhase("input");
+  }, []);
+
+  const handleRetryIngest = useCallback(() => {
+    setPhase("input");
+    setJobId("");
+  }, []);
+
+  if (phase === "ingesting") {
+    return (
+      <JobProgress
+        jobId={jobId}
+        jobType="ingest"
+        onComplete={handleIngestComplete}
+        onRetry={handleRetryIngest}
+      />
+    );
+  }
 
   return (
     <section className="workspace">
