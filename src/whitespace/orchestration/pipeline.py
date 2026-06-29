@@ -121,8 +121,6 @@ def _build_pipeline(
     config: Config,
     registry_path: Path | None,
 ) -> Pipeline:
-    from whitespace.observability.langsmith import configure_tracing_env
-
     from whitespace.agents.council.gap_critic import GapCritic
     from whitespace.agents.council.gap_ideator import GapIdeator
     from whitespace.agents.council.gap_synthesiser import GapSynthesiser
@@ -138,6 +136,7 @@ def _build_pipeline(
     from whitespace.models.registry import ModelRegistry
     from whitespace.models.router import ModelRouter
     from whitespace.observability.cost_tracker import CostTracker
+    from whitespace.observability.langsmith import configure_tracing_env
     from whitespace.observability.local_metrics import LocalMetricsEmitter
     from whitespace.observability.metrics import MetricsEmitter
     from whitespace.playbook import PLAYBOOK
