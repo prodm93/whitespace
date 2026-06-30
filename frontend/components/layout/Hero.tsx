@@ -11,7 +11,7 @@ export default function Hero() {
         <svg
           ref={svgRef}
           className="hero__svg"
-          viewBox="0 0 1200 500"
+          viewBox="0 60 1200 360"
           preserveAspectRatio="xMidYMid meet"
           aria-hidden="true"
         >
@@ -69,7 +69,7 @@ export default function Hero() {
           {/* Primary arc — sweeping trajectory through the letterforms */}
           <path
             className="arc-path"
-            d="M 20,440 C 180,350 420,60 680,160 C 880,230 1020,50 1190,70"
+            d="M 20,400 C 160,330 400,100 680,180 C 880,230 1020,80 1190,90"
             fill="none"
             stroke="var(--stroke-cream)"
             strokeWidth="1"
@@ -78,7 +78,7 @@ export default function Hero() {
           {/* Secondary arc — slightly offset, thinner, creates a trajectory ribbon */}
           <path
             className="arc-path-secondary"
-            d="M 35,450 C 195,355 435,55 695,150 C 895,220 1035,40 1195,55"
+            d="M 35,410 C 175,335 415,95 695,170 C 895,220 1035,70 1195,75"
             fill="none"
             stroke="var(--stroke-lavender)"
             strokeWidth="0.6"
@@ -138,18 +138,17 @@ export default function Hero() {
         </svg>
 
         <p className="hero__tagline">
-          Adversarial patent analysis. Multi-model ideation.
+          Find the gaps. Own the ideas.
         </p>
       </div>
 
       <style jsx>{`
         .hero {
           position: relative;
-          min-height: 100vh;
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 96px var(--margin) 64px;
+          padding: 80px var(--margin) 48px;
           overflow: hidden;
         }
         .hero__inner {
@@ -162,11 +161,11 @@ export default function Hero() {
         }
         .hero__svg {
           width: 100%;
-          max-width: 1200px;
+          max-width: 900px;
           height: auto;
         }
         .hero__tagline {
-          margin-top: 32px;
+          margin-top: 24px;
           font-family: "Inter", sans-serif;
           font-size: var(--text-body);
           font-weight: 300;
