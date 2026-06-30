@@ -1,0 +1,10 @@
+project_name      = "whitespace"
+environment       = "dev"
+aws_region        = "sa-east-1"
+vpc_cidr          = "10.0.0.0/16"
+az_count          = 2
+fargate_cpu       = 1024
+fargate_memory    = 2048
+container_port    = 8000
+use_custom_domain = false
+budget_limit_usd  = "10.0"
