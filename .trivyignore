@@ -52,3 +52,41 @@ CVE-2026-48962 exp:2026-10-01
 # Fixed upstream in Archive::Tar 3.10. Debian: fix_deferred.
 # https://www.openwall.com/lists/oss-security/2026/05/26/4
 CVE-2026-9538 exp:2026-10-01
+
+
+# ============================================================================
+# Terraform IaC misconfigurations — cost-driven or intentional architecture.
+# TODO: Address these when scaling to production with real users/traffic.
+# ============================================================================
+
+# CloudFront distribution without WAF. AWS WAF minimum cost is $5/month for
+# the web ACL + $1/rule/month + $0.60/million requests. Not justified for a
+# portfolio project with minimal traffic. Add WAF when scaling up.
+# https://aws.amazon.com/waf/pricing/
+# https://avd.aquasec.com/misconfig/aws-0011
+AVD-AWS-0011 exp:2026-10-01
+
+# S3 buckets without Customer Managed Key (CMK) encryption. S3 already
+# encrypts all objects with SSE-S3 (AES-256) by default since Jan 2023.
+# CMK requires a KMS key at $1/month each. Widely acknowledged as
+# over-prescriptive for non-regulated workloads. Add CMK when scaling up
+# or if handling regulated data.
+# https://github.com/aquasecurity/trivy/discussions/8926
+# https://avd.aquasec.com/misconfig/aws-0132
+AVD-AWS-0132 exp:2026-10-01
+
+# Fargate security group allows unrestricted egress (0.0.0.0/0). Intentional:
+# Fargate tasks require outbound internet access to reach Bedrock APIs,
+# external search APIs (USPTO, Exa, Firecrawl), Neo4j Aura, and LangSmith.
+# Restricting egress would break the application. Tighten to specific CIDR
+# ranges or VPC endpoints when scaling up.
+# https://avd.aquasec.com/misconfig/aws-0104
+AVD-AWS-0104 exp:2026-10-01
+
+# Public subnets with map_public_ip_on_launch = true. Intentional: these are
+# public subnets by design — NAT gateway and internet gateway sit here.
+# Standard AWS VPC architecture. Fargate tasks run in private subnets, not
+# these. No change needed unless moving to a fully private architecture with
+# VPC endpoints when scaling up.
+# https://avd.aquasec.com/misconfig/aws-0164
+AVD-AWS-0164 exp:2026-10-01

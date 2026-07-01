@@ -22,6 +22,8 @@ resource "aws_cloudwatch_log_group" "lambda" {
 
 resource "aws_sns_topic" "alarms" {
   name = "${var.name_prefix}-alarms"
+  # AWS-managed SNS key: free to store, API calls covered by 20k/month KMS free tier
+  kms_master_key_id = "alias/aws/sns"
   tags = var.common_tags
 }
 
