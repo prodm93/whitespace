@@ -75,3 +75,9 @@ AVD-AWS-0011 exp:2026-10-01
 # https://avd.aquasec.com/misconfig/aws-0132
 AVD-AWS-0132 exp:2026-10-01
 
+# SNS topic encrypted with AWS-managed key (alias/aws/sns) instead of a
+# Customer Managed Key. Same rationale as S3 CMK above — CMK adds $1/month
+# for granular key management that isn't needed for alarm notifications on a
+# portfolio project. Upgrade to CMK when scaling up.
+# https://avd.aquasec.com/misconfig/aws-0136
+AVD-AWS-0136 exp:2026-10-01
