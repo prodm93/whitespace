@@ -51,7 +51,7 @@ def _scrub(value: Any) -> Any:
     return value
 
 
-def _anonymiser(payload: dict) -> dict:
+def _anonymiser(payload: dict[str, Any]) -> dict[str, Any]:
     scrubbed = _scrub(payload)
     return scrubbed if isinstance(scrubbed, dict) else {"value": scrubbed}
 

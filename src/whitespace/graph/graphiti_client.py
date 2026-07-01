@@ -90,7 +90,7 @@ class GraphitiClient:
         if self._graphiti is None:
             return
         try:
-            await self._graphiti.close()
+            await self._graphiti.close()  # type: ignore[no-untyped-call]
         except Exception:
             logger.exception("GraphitiClient: error closing")
         finally:

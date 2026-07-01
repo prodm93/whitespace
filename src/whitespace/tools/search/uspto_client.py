@@ -78,7 +78,8 @@ class UsptpClient:
                 headers={"Content-Type": "application/json"},
             )
             response.raise_for_status()
-            return response.json()
+            result: dict[str, Any] = response.json()
+            return result
 
     def _parse_response(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
         patents_raw = raw.get("patents") or []

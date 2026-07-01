@@ -9,7 +9,7 @@ from whitespace.queue.base import JobQueue
 
 logger = logging.getLogger(__name__)
 
-JobHandler = Callable[[str, dict], Coroutine[Any, Any, dict]]
+JobHandler = Callable[[str, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]
 
 
 class LocalAsyncQueue(JobQueue):
@@ -22,7 +22,7 @@ class LocalAsyncQueue(JobQueue):
     def register_handler(self, job_type: str, handler: JobHandler) -> None:
         self._handlers[job_type] = handler
 
-    async def enqueue(self, job_type: str, payload: dict) -> str:
+    async def enqueue(self, job_type: str, payload: dict[str, Any]) -> str:
         job_id = uuid.uuid4().hex
         self._jobs[job_id] = JobResult(job_id=job_id, status=JobStatus.PENDING)
 
@@ -54,7 +54,7 @@ class LocalAsyncQueue(JobQueue):
         job_id: str,
         job_type: str,
         handler: JobHandler,
-        payload: dict,
+        payload: dict[str, Any],
     ) -> None:
         self._jobs[job_id] = JobResult(job_id=job_id, status=JobStatus.RUNNING)
         try:

@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 from whitespace.domain import JobResult
 
 
 class JobQueue(ABC):
     @abstractmethod
-    async def enqueue(self, job_type: str, payload: dict) -> str:
+    async def enqueue(self, job_type: str, payload: dict[str, Any]) -> str:
         """Enqueue a job. Returns a job_id for polling."""
         ...
 

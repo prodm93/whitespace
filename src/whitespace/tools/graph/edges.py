@@ -113,7 +113,7 @@ class GraphEdgeTools:
         return _entity_edges_to_domain(results)
 
 
-def _entity_edges_to_domain(results: list) -> list[Edge]:  # noqa: ANN001
+def _entity_edges_to_domain(results: list[Any]) -> list[Edge]:
     edges: list[Edge] = []
     for entity_edge in results:
         attrs: dict[str, Any] = {}

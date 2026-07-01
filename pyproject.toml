@@ -50,6 +50,7 @@ dev = [
     "pytest>=8,<9",
     "pytest-asyncio>=0.23,<1",
     "types-pyyaml>=6,<7",
+    "types-openpyxl>=3.1,<4",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -70,6 +71,14 @@ ignore = ["B008"]
 python_version = "3.11"
 strict = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore", "botocore.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["firecrawl", "firecrawl.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -51,7 +51,8 @@ class IngestGraph:
             "ingest_result": IngestResult(documents_processed=0),
         }
         final_state = await self._compiled.ainvoke(initial_state)
-        return final_state["ingest_result"]
+        result: IngestResult = final_state["ingest_result"]
+        return result
 
     async def _run_ontology(self, state: IngestState) -> dict[str, Any]:
         ontology = await self._ontology_agent.run(state["doc_paths"])

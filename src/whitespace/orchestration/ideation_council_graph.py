@@ -99,7 +99,8 @@ class IdeationCouncilGraph:
             "final_proposals": [],
         }
         final_state = await self._compiled.ainvoke(initial_state)
-        return final_state["final_proposals"]
+        result: list[IdeationProposal] = final_state["final_proposals"]
+        return result
 
     async def _run_ideators(
         self,

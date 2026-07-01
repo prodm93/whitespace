@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 
 from whitespace.api.models import IdeateRequest, JobResponse
 from whitespace.domain import JobStatus
-from whitespace.middleware.auth import get_current_user
+from whitespace.middleware.auth import CurrentUser, get_current_user
 from whitespace.middleware.usage import check_usage
 from whitespace.queue.base import JobQueue
 
@@ -16,8 +16,8 @@ router = APIRouter()
 async def trigger_ideation(
     body: IdeateRequest,
     request: Request,
-    user=Depends(get_current_user),
-    _usage=Depends(check_usage),
+    user: CurrentUser = Depends(get_current_user),
+    _usage: None = Depends(check_usage),
 ) -> JobResponse:
     """Enqueue ideation council on selected needs. Returns a job ID for polling."""
     logger.info(

@@ -35,7 +35,7 @@ def sanitise_class_name(raw: str) -> str | None:
     parts = _strip_to_words(raw)
     if not parts:
         return None
-    cleaned = "".join(p[:1].upper() + p[1:].lower() for p in parts)
+    cleaned: str | None = "".join(p[:1].upper() + p[1:].lower() for p in parts)
     if not cleaned or not cleaned[0].isalpha():
         cleaned = f"T{cleaned}" if cleaned else None
     return cleaned
