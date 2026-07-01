@@ -1,0 +1,54 @@
+# Debian 13 base image (python:3.11-slim) — no patches available from Debian.
+# None of these packages are used by our application. Revisit when Debian
+# releases fixes or when upgrading the base image.
+
+# libacl1 2.3.2-2 — symlink traversal in ACL path functions.
+# Requires local attacker controlling a path component traversed by a
+# privileged caller. Our container never invokes ACL utilities on
+# user-controlled paths. Upstream fix: acl >= 2.4.0.
+# https://thewindowsupdate.com/2026/06/30/cve-2026-54369-acl-2-4-0-symlink-traversal-privilege-escalation-via-libacl-functions/
+CVE-2026-54369 exp:2026-10-01
+
+# libattr1 1:2.5.2-3 — symlink traversal in getfattr/setfattr.
+# Same class as CVE-2026-54369. Our container never calls getfattr or
+# setfattr. Upstream fix: attr >= 2.6.0.
+# https://thewindowsupdate.com/2026/06/30/cve-2026-54371-attr-2-6-0-symlink-traversal-privilege-escalation-via-getfattr-setfattr/
+CVE-2026-54371 exp:2026-10-01
+
+# ncurses 6.5+20250216-2 (libncursesw6, libtinfo6, ncurses-base, ncurses-bin)
+# Stack buffer overflow in infocmp's analyze_string() via crafted termcap
+# input. Our container never runs infocmp or processes untrusted terminal
+# capability strings. Fixed upstream in 6.5-20251213, not backported to
+# Debian 13.
+# https://github.com/Cao-Wuhui/CVE-2025-69720
+CVE-2025-69720 exp:2026-10-01
+
+# perl-base 5.40.1-6 — five CVEs, all Debian status "affected" or
+# "fix_deferred". Our application does not use Perl. Perl is pulled in by
+# the base image for dpkg/apt internals only.
+
+# Heap buffer overflow in regex compilation — only triggers on 32-bit
+# builds. Our container is 64-bit.
+# https://security.snyk.io/vuln/SNYK-DEBIAN13-PERL-17037434
+CVE-2026-8376 exp:2026-10-01
+
+# Archive::Tar path traversal via crafted symlinks. Fixed upstream in
+# Archive::Tar 3.08. Debian: fix_deferred.
+# https://security-tracker.debian.org/tracker/CVE-2026-42496
+CVE-2026-42496 exp:2026-10-01
+
+# Archive::Tar hardlink extraction outside target directory. Fixed upstream
+# in Archive::Tar 3.08. Debian: fix_deferred.
+# https://security-tracker.debian.org/tracker/source-package/perl
+CVE-2026-42497 exp:2026-10-01
+
+# IO::Compress arbitrary code execution via eval STRING on attacker-
+# controlled output glob. Fixed in IO::Compress 2.220. Backported to
+# perl 5.40.1-8 in Debian unstable, not yet in stable.
+# https://www.openwall.com/lists/oss-security/2026/05/27/4
+CVE-2026-48962 exp:2026-10-01
+
+# Archive::Tar memory exhaustion via oversized size field in tar header.
+# Fixed upstream in Archive::Tar 3.10. Debian: fix_deferred.
+# https://www.openwall.com/lists/oss-security/2026/05/26/4
+CVE-2026-9538 exp:2026-10-01

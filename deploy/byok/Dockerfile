@@ -7,7 +7,8 @@ COPY src/ src/
 COPY main.py .
 COPY model_registry.yaml .
 
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --upgrade setuptools wheel && \
+    pip install --no-cache-dir -e .
 
 EXPOSE 8000
 

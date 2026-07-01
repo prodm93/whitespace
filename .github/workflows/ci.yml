@@ -99,6 +99,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
           format: table
+          trivyignores: .trivyignore
 
       - name: Trivy IaC scan
         uses: aquasecurity/trivy-action@v0.36.0
