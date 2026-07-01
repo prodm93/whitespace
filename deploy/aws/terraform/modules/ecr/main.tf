@@ -1,6 +1,7 @@
 resource "aws_ecr_repository" "backend" {
   name                 = "${var.name_prefix}-backend"
-  image_tag_mutability = "MUTABLE"
+  # Immutable tags prevent image mutation attacks; CI pushes unique tags per build
+  image_tag_mutability = "IMMUTABLE"
   force_delete         = false
 
   image_scanning_configuration {
