@@ -53,14 +53,11 @@ jobs:
           exclude: _reference
           strict: false
 
-      - name: Install Trivy
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin
-
       - name: Trivy filesystem scan
-        run: |
-          trivy fs \
-            --skip-dirs _reference \
-            --exit-code 0 \
-            .
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: 1
+          format: table
