@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
+
 export default function Nav() {
   return (
     <nav className="nav">
       <div className="nav__inner">
-        <a href="/" className="nav__wordmark">
+        <Link href="/" className="nav__wordmark">
           WhiteSpace
-        </a>
+        </Link>
       </div>
 
       <style jsx>{`
