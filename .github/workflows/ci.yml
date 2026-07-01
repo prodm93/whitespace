@@ -12,13 +12,13 @@ permissions:
   contents: read
 
 jobs:
-  lint-test-security:
-    name: Lint, Test & Security
+  # ---------- Lint + Test ----------
+  test:
+    name: Lint & Test
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,7 +28,7 @@ jobs:
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: pip install -e ".[dev]"
 
       - name: Ruff lint
@@ -40,10 +40,10 @@ jobs:
       - name: Mypy type-check
         run: mypy src/whitespace/
 
-      - name: Run tests
+      - name: Pytest
         run: |
           if [ -d tests ]; then
-            pytest
+            pytest --tb=short -q
           else
             echo "No tests yet, skipping."
           fi
@@ -67,6 +67,14 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+  # ---------- OpenGrep SAST ----------
+  sast:
+    name: OpenGrep SAST
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: OpenGrep SAST
         uses: platform-sec/opengrep-action@acb635dd35b5840476b98b7b88b88b83c6819f9d
         with:
@@ -74,6 +82,14 @@ jobs:
           output-format: json
           exclude: _reference
           strict: false
+
+  # ---------- Trivy Security Scanning ----------
+  trivy:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@v0.36.0
