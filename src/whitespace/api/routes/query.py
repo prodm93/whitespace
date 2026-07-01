@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from whitespace.api.models import QueryRequest, QueryResponse
-from whitespace.middleware.auth import get_current_user
+from whitespace.middleware.auth import CurrentUser, get_current_user
 from whitespace.middleware.usage import check_usage
 from whitespace.orchestration.pipeline import Pipeline
 
@@ -15,8 +15,8 @@ router = APIRouter()
 async def graph_query(
     body: QueryRequest,
     request: Request,
-    user=Depends(get_current_user),
-    _usage=Depends(check_usage),
+    user: CurrentUser = Depends(get_current_user),
+    _usage: None = Depends(check_usage),
 ) -> QueryResponse:
     """Graph-grounded Q&A — runs synchronously (fast read-only traversal)."""
     logger.info("Query from user=%s: %.80s", user.user_id, body.query)

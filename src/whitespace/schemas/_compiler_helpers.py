@@ -80,7 +80,7 @@ def compile_model(
 ) -> type[BaseModel]:
     """Compile a single ontology type definition into a runtime BaseModel."""
     pydantic_fields = fields_to_pydantic(fields, owner=sanitised_name, protected=protected)
-    model = create_model(sanitised_name, **pydantic_fields)
+    model = create_model(sanitised_name, **pydantic_fields)  # type: ignore[call-overload]
     if sanitised_name != original_name:
         model.__doc__ = f"{description} (original name: {original_name})"
     else:

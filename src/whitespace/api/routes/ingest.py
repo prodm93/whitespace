@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 
 from whitespace.api.models import IngestRequest, JobResponse
 from whitespace.domain import JobStatus
-from whitespace.middleware.auth import get_current_user
+from whitespace.middleware.auth import CurrentUser, get_current_user
 from whitespace.middleware.usage import check_usage
 from whitespace.queue.base import JobQueue
 
@@ -16,8 +16,8 @@ router = APIRouter()
 async def trigger_ingest(
     body: IngestRequest,
     request: Request,
-    user=Depends(get_current_user),
-    _usage=Depends(check_usage),
+    user: CurrentUser = Depends(get_current_user),
+    _usage: None = Depends(check_usage),
 ) -> JobResponse:
     """Enqueue domain ingestion (USPTO search + web search + optional docs)."""
     logger.info(

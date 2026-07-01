@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import uuid
+from typing import Any
 
 from whitespace.config import Config
 from whitespace.domain import JobResult, JobStatus
@@ -21,7 +22,7 @@ class SqsJobQueue(JobQueue):
         self._queue_url = config.sqs_queue_url
         self._table = self._dynamo.Table(config.dynamodb_jobs_table)
 
-    async def enqueue(self, job_type: str, payload: dict) -> str:
+    async def enqueue(self, job_type: str, payload: dict[str, Any]) -> str:
         job_id = uuid.uuid4().hex
 
         await asyncio.to_thread(

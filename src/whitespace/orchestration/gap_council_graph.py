@@ -68,7 +68,8 @@ class GapCouncilGraph:
             "synthesised_needs": [],
         }
         final_state = await self._compiled.ainvoke(initial_state)
-        return final_state["synthesised_needs"]
+        result: list[UnmetNeed] = final_state["synthesised_needs"]
+        return result
 
     async def _run_ideators(self, state: GapCouncilState) -> dict[str, Any]:
         tasks = [

@@ -49,7 +49,8 @@ class QueryGraph:
             "answer": "",
         }
         final_state = await self._compiled.ainvoke(initial_state)
-        return final_state["answer"]
+        result: str = final_state["answer"]
+        return result
 
     async def _run_context(self, state: QueryState) -> dict[str, Any]:
         context = await self._context_agent.run(state["query"])

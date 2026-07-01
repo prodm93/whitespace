@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 
 from whitespace.api.models import GapRequest, JobResponse
 from whitespace.domain import JobStatus
-from whitespace.middleware.auth import get_current_user
+from whitespace.middleware.auth import CurrentUser, get_current_user
 from whitespace.middleware.usage import check_usage
 from whitespace.queue.base import JobQueue
 
@@ -16,8 +16,8 @@ router = APIRouter()
 async def trigger_gap_analysis(
     body: GapRequest,
     request: Request,
-    user=Depends(get_current_user),
-    _usage=Depends(check_usage),
+    user: CurrentUser = Depends(get_current_user),
+    _usage: None = Depends(check_usage),
 ) -> JobResponse:
     """Enqueue a gap analysis council run. Returns a job ID for polling."""
     logger.info("Gap analysis requested by user=%s", user.user_id)

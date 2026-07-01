@@ -33,7 +33,7 @@ class ScholarClient:
         *,
         max_results: int,
     ) -> dict[str, Any]:
-        params = {
+        params: dict[str, str | int] = {
             "query": query,
             "limit": min(max_results, 100),
             "fields": _SEARCH_FIELDS,
@@ -44,7 +44,8 @@ class ScholarClient:
                 params=params,
             )
             response.raise_for_status()
-            return response.json()
+            result: dict[str, Any] = response.json()
+            return result
 
     def _parse_response(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
         papers_raw = raw.get("data") or []

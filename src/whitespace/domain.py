@@ -17,7 +17,7 @@ class JobStatus(StrEnum):
 class JobResult(BaseModel):
     job_id: str = Field(..., description="Unique identifier for the async job")
     status: JobStatus = Field(..., description="Current job status")
-    result: dict | None = Field(
+    result: dict[str, Any] | None = Field(
         default=None,
         description="Job output payload, present only when status is completed",
     )

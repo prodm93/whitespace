@@ -45,4 +45,5 @@ class DocumentLoader:
         if loader_cls is None:
             raise ValueError(f"Unsupported document format: {suffix}")
         logger.info("Loading %s with %s", path, loader_cls.__name__)
-        return loader_cls().load(path)
+        result: str = loader_cls().load(path)
+        return result
