@@ -81,6 +81,15 @@ export default function HeadLightbulb({
         strokeLinejoin="round"
       />
 
+      {/* Connector — brain squiggle into filament */}
+      <path
+        className="head-stroke"
+        d="M 78,44 C 83,43 89,44 94,46"
+        stroke="var(--stroke-cream)"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+
       {/* Filament — tiny zigzag inside bulb */}
       <path
         className="bulb-stroke"

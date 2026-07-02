@@ -33,6 +33,8 @@ export function useHeroAnimation() {
       svg.querySelectorAll(".hb-base").forEach(b => gsap.set(b, { opacity: 0.4 }));
       const g = svg.querySelector(".hb-glow");
       if (g) gsap.set(g, { opacity: 0.1 });
+      const fg = svg.querySelector(".hb-filament-glow");
+      if (fg) gsap.set(fg, { opacity: 0.2 });
       svg.querySelectorAll(".hero-star").forEach(s => gsap.set(s, { opacity: 0.4 }));
       return;
     }
@@ -99,31 +101,59 @@ export function useHeroAnimation() {
       drawStroke(brain as SVGGeometryElement, tl, 3.8 + i * 0.15, 0.8);
     });
 
-    // ── Phase 5: Bulb ignites (4.7s) ──
+    // ── Phase 4b: Bulb draws translucent with head (3.5s) ──
+    const bulbPath = svg.querySelector(".hb-bulb") as SVGGeometryElement | null;
+    const filament = svg.querySelector(".hb-filament") as SVGGeometryElement | null;
+    const filamentGlow = svg.querySelector(".hb-filament-glow");
+
+    if (bulbPath) {
+      const len = (bulbPath as SVGGeometryElement).getTotalLength();
+      gsap.set(bulbPath, { strokeDasharray: len, strokeDashoffset: len, opacity: 0.25 });
+      tl.to(bulbPath, { strokeDashoffset: 0, duration: 0.8, ease: "power2.inOut" }, 3.5);
+    }
+    if (filament) {
+      const len = (filament as SVGGeometryElement).getTotalLength();
+      gsap.set(filament, { strokeDasharray: len, strokeDashoffset: len, opacity: 0.25 });
+      tl.to(filament, { strokeDashoffset: 0, duration: 0.6, ease: "power2.inOut" }, 3.8);
+    }
+
+    svg.querySelectorAll(".hb-base").forEach((base, i) => {
+      gsap.set(base, { opacity: 0 });
+      tl.to(base, { opacity: 0.15, duration: 0.3 }, 3.9 + i * 0.04);
+    });
+
+    if (filamentGlow) gsap.set(filamentGlow, { opacity: 0 });
+
+    const bulbGlow = svg.querySelector(".hb-glow");
+    if (bulbGlow) gsap.set(bulbGlow, { opacity: 0 });
+
+    // ── Phase 5: Traveller arrives, bulb ignites (4.7s) ──
     if (traveller) {
       tl.to(traveller, { opacity: 0, duration: 0.3 }, 4.7);
     }
 
-    const bulbPath = svg.querySelector(".hb-bulb") as SVGGeometryElement | null;
-    const filament = svg.querySelector(".hb-filament") as SVGGeometryElement | null;
-    if (bulbPath) drawStroke(bulbPath, tl, 4.7, 0.5);
-    if (filament) drawStroke(filament, tl, 4.9, 0.3);
+    if (bulbPath) {
+      tl.to(bulbPath, { opacity: 1, duration: 0.4, ease: "power2.out" }, 4.7);
+    }
+    if (filament) {
+      tl.to(filament, { opacity: 1, duration: 0.4, ease: "power2.out" }, 4.7);
+    }
+    if (filamentGlow) {
+      tl.to(filamentGlow, { opacity: 0.35, duration: 0.5, ease: "power2.out" }, 4.8);
+    }
 
     svg.querySelectorAll(".hb-base").forEach((base, i) => {
-      gsap.set(base, { opacity: 0 });
-      tl.to(base, { opacity: 0.4, duration: 0.2, ease: "power2.out" }, 4.9 + i * 0.06);
+      tl.to(base, { opacity: 0.4, duration: 0.3, ease: "power2.out" }, 4.9 + i * 0.06);
     });
 
-    const bulbGlow = svg.querySelector(".hb-glow");
     if (bulbGlow) {
-      gsap.set(bulbGlow, { opacity: 0 });
-      tl.to(bulbGlow, { opacity: 0.22, duration: 0.4, ease: "power2.out" }, 5.0);
+      tl.to(bulbGlow, { opacity: 0.22, duration: 0.4, ease: "power2.out" }, 4.8);
     }
 
     const rays = svg.querySelectorAll(".hb-ray");
     rays.forEach((ray, i) => {
       gsap.set(ray, { opacity: 0 });
-      tl.to(ray, { opacity: 0.7, duration: 0.3, ease: "power2.out" }, 5.2 + i * 0.06);
+      tl.to(ray, { opacity: 0.9, duration: 0.3, ease: "power2.out" }, 5.0 + i * 0.06);
     });
 
     // Stars fade in during sequence
@@ -157,9 +187,16 @@ export function useHeroAnimation() {
       }));
     }
 
+    if (filamentGlow) {
+      ambient.push(gsap.to(filamentGlow, {
+        opacity: 0.12, duration: 2.5, repeat: -1, yoyo: true,
+        ease: "sine.inOut", delay: 6,
+      }));
+    }
+
     rays.forEach((ray, i) => {
       ambient.push(gsap.to(ray, {
-        opacity: 0.2, duration: 2 + i * 0.3, repeat: -1, yoyo: true,
+        opacity: 0.4, duration: 2 + i * 0.3, repeat: -1, yoyo: true,
         ease: "sine.inOut", delay: 6 + i * 0.1,
       }));
     });
