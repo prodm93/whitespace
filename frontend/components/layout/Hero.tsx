@@ -31,6 +31,7 @@ export default function Hero() {
           </defs>
 
           {/* ── Knowledge graph (lower-left) ── */}
+          <g transform="translate(120,385) scale(1.15) translate(-120,-385)">
           <line className="hg-edge" x1="45" y1="295" x2="95" y2="262" />
           <line className="hg-edge" x1="45" y1="295" x2="62" y2="340" />
           <line className="hg-edge" x1="45" y1="295" x2="140" y2="330" />
@@ -62,6 +63,7 @@ export default function Hero() {
           <circle className="hg-node" cx="160" cy="375" r="3" />
           <circle className="hg-node" cx="55" cy="398" r="3" />
           <circle className="hg-detach" cx="120" cy="385" r="3.5" />
+          </g>
 
           {/* ── Outlined hero text ── */}
           <text
@@ -85,7 +87,7 @@ export default function Hero() {
           {/* ── Arc (shortened, graph → head) ── */}
           <path
             className="hero-arc"
-            d="M 120,385 C 250,326 420,148 660,228 C 850,284 970,160 1047,158"
+            d="M 120,385 C 250,326 420,138 660,218 C 850,274 970,150 1047,148"
             fill="none" stroke="var(--stroke-cream)" strokeWidth="1"
           />
           <path
