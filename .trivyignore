@@ -53,6 +53,14 @@ CVE-2026-48962 exp:2026-10-01
 # https://www.openwall.com/lists/oss-security/2026/05/26/4
 CVE-2026-9538 exp:2026-10-01
 
+# gzip 1.13-1 — global buffer over-read in LZH decompression via poisoned
+# shared global state between LZW and LZH formats (CWE-126). Requires local
+# decompression of crafted archives; our container never invokes gzip on
+# untrusted LZH input. Fixed upstream (63dbf6b), not yet packaged for
+# Debian 13.
+# https://cert.pl/en/posts/2026/06/CVE-2026-41991/
+CVE-2026-41992 exp:2026-10-01
+
 
 # ============================================================================
 # Terraform IaC misconfigurations — cost-driven or intentional architecture.
