@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from whitespace.config import Config
 from whitespace.observability.metrics import MetricsEmitter
@@ -28,6 +29,18 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.state.queue = _build_queue(config)
     app.state.metrics = _build_metrics(config)
     app.state.store = _build_store(config)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost",
+            "http://localhost:3000",
+            "http://localhost:8000",
+        ],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     _mount_routes(app)
 

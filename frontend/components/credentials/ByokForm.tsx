@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { AuraCreds, ByokCredentials } from "@/types";
 import { parseAuraFile } from "./AuraFileParser";
-import { validateCredentials } from "@/lib/api";
+import { submitCredentials } from "@/lib/api";
 
 interface ByokFormProps {
   onConnect: (creds: ByokCredentials) => void;
@@ -58,11 +58,16 @@ export default function ByokForm({ onConnect, onBack }: ByokFormProps) {
 
     setValidating(true);
     try {
-      const result = await validateCredentials(creds);
-      if (result.valid) {
+      const result = await submitCredentials(creds);
+      if (result.openrouter_ok && result.neo4j_ok) {
         onConnect(creds);
       } else {
-        setError(result.error ?? "Credentials validation failed.");
+        const errors: string[] = [];
+        if (!result.openrouter_ok)
+          errors.push(`OpenRouter: ${result.openrouter_error ?? "failed"}`);
+        if (!result.neo4j_ok)
+          errors.push(`Neo4j: ${result.neo4j_error ?? "failed"}`);
+        setError(errors.join(" | "));
       }
     } catch {
       setError("Could not reach the backend. Is it running?");

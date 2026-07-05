@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JobResult, JobStatusValue, JobType } from "@/types";
-import { useCredentials } from "@/context/CredentialsContext";
 import { pollJob } from "@/lib/api";
 import { useGraphAnimation } from "@/animations/useGraphAnimation";
 
@@ -40,7 +39,6 @@ export default function JobProgress({
   onComplete,
   onRetry,
 }: JobProgressProps) {
-  const { credentials } = useCredentials();
   const [status, setStatus] = useState<JobStatusValue>("pending");
   const [error, setError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -48,7 +46,7 @@ export default function JobProgress({
 
   const doPoll = useCallback(async () => {
     try {
-      const result = await pollJob(credentials?.byok ?? null, jobId);
+      const result = await pollJob(jobId);
       setStatus(result.status);
 
       if (result.status === "completed") {
@@ -62,7 +60,7 @@ export default function JobProgress({
       setError(err instanceof Error ? err.message : "Polling error");
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
-  }, [credentials, jobId, onComplete]);
+  }, [jobId, onComplete]);
 
   useEffect(() => {
     doPoll();

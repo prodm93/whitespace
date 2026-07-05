@@ -29,5 +29,7 @@ export function parseAuraFile(text: string): AuraCreds {
     neo4jUsername: entries["NEO4J_USERNAME"],
     neo4jPassword: entries["NEO4J_PASSWORD"],
     neo4jDatabase: entries["NEO4J_DATABASE"],
+    auraInstanceId: entries["AURA_INSTANCEID"] ?? "",
+    auraInstanceName: entries["AURA_INSTANCENAME"] ?? "",
   };
 }

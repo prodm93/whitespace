@@ -5,6 +5,8 @@ export interface AuraCreds {
   neo4jUsername: string;
   neo4jPassword: string;
   neo4jDatabase: string;
+  auraInstanceId: string;
+  auraInstanceName: string;
 }
 
 export interface ByokCredentials {
@@ -40,9 +42,12 @@ export interface JobResult {
   error: string | null;
 }
 
-export interface ValidationResult {
-  valid: boolean;
-  error?: string;
+export interface CredentialsResult {
+  status: string;
+  openrouter_ok: boolean;
+  neo4j_ok: boolean;
+  openrouter_error: string | null;
+  neo4j_error: string | null;
 }
 
 export interface UnmetNeed {

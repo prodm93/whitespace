@@ -9,7 +9,6 @@ import type {
   UnmetNeed,
   UploadedFile,
 } from "@/types";
-import { useCredentials } from "@/context/CredentialsContext";
 import {
   triggerGapAnalysis,
   triggerIdeation,
@@ -34,9 +33,6 @@ function toUploadedFile(file: File): UploadedFile {
 }
 
 export default function Workspace() {
-  const { credentials } = useCredentials();
-  const byok = credentials?.byok ?? null;
-
   const [profileFiles, setProfileFiles] = useState<UploadedFile[]>([]);
   const [domainFiles, setDomainFiles] = useState<UploadedFile[]>([]);
   const [domain, setDomain] = useState("");
@@ -75,7 +71,6 @@ export default function Workspace() {
     setSubmitting(true);
     try {
       const result = await triggerIngest(
-        byok,
         domain,
         cpcClass,
         profileFiles.map((f) => f.file),
@@ -88,18 +83,18 @@ export default function Workspace() {
     } finally {
       setSubmitting(false);
     }
-  }, [byok, domain, cpcClass, profileFiles, domainFiles]);
+  }, [domain, cpcClass, profileFiles, domainFiles]);
 
   const handleIngestComplete = useCallback(async () => {
     try {
-      const gapJob = await triggerGapAnalysis(byok);
+      const gapJob = await triggerGapAnalysis();
       setJobId(gapJob.job_id);
       setPhase("gap-running");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start gap analysis.");
       setPhase("input");
     }
-  }, [byok]);
+  }, []);
 
   const handleGapComplete = useCallback((result: JobResult) => {
     const data = result.result as GapAnalysisResponse | null;
@@ -110,7 +105,7 @@ export default function Workspace() {
   const handleIdeate = useCallback(async (selectedTitles: string[]) => {
     setIdeateSubmitting(true);
     try {
-      const job = await triggerIdeation(byok, selectedTitles);
+      const job = await triggerIdeation(selectedTitles);
       setJobId(job.job_id);
       setPhase("ideation-running");
     } catch (err) {
@@ -118,7 +113,7 @@ export default function Workspace() {
     } finally {
       setIdeateSubmitting(false);
     }
-  }, [byok]);
+  }, []);
 
   const handleIdeationComplete = useCallback((result: JobResult) => {
     const data = result.result as IdeationResponse | null;
@@ -133,13 +128,13 @@ export default function Workspace() {
 
   const handleRetryGaps = useCallback(async () => {
     try {
-      const gapJob = await triggerGapAnalysis(byok);
+      const gapJob = await triggerGapAnalysis();
       setJobId(gapJob.job_id);
       setPhase("gap-running");
     } catch {
       setPhase("input");
     }
-  }, [byok]);
+  }, []);
 
   const handleRetryIdeation = useCallback(() => {
     setPhase("gap-results");
