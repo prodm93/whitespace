@@ -1,11 +1,19 @@
+import os
 from typing import Literal
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _env_files() -> tuple[str, ...]:
+    creds = os.environ.get("CREDS_ENV_FILE", "")
+    if creds:
+        return (".env", creds)
+    return (".env",)
+
+
 class Config(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_env_files(), extra="ignore")
 
     # Operating mode
     mode: Literal["byok", "saas"] = "byok"

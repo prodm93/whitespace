@@ -1,8 +1,9 @@
-"""Process-wide singleton holding live configuration state.
+"""Process-wide singleton holding the live :class:`Pipeline`.
 
-Submitting credentials via ``POST /api/credentials`` rewrites ``.env``,
-reloads it into ``os.environ``, and calls :meth:`AppState.reset` so the
-next request rebuilds against the new values.
+The pipeline is built lazily from the current process environment (which
+mirrors ``.env``). Submitting credentials via ``POST /api/credentials``
+rewrites ``.env``, reloads it into ``os.environ``, and calls
+:meth:`AppState.reset` so the next request rebuilds.
 """
 
 from __future__ import annotations
@@ -11,26 +12,35 @@ import asyncio
 import logging
 
 from whitespace.config import Config
+from whitespace.orchestration.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
 
 
 class AppState:
     def __init__(self) -> None:
-        self._config: Config | None = None
+        self._pipeline: Pipeline | None = None
         self._lock = asyncio.Lock()
 
-    async def get_config(self) -> Config:
+    async def get_pipeline(self) -> Pipeline:
         async with self._lock:
-            if self._config is None:
-                self._config = Config()
-            return self._config
+            if self._pipeline is None:
+                config = Config()
+                if not config.openrouter_api_key:
+                    raise CredentialsNotSet("OpenRouter API key is not set")
+                if not config.neo4j_uri:
+                    raise CredentialsNotSet("Neo4j URI is not set")
+                logger.info("AppState: building pipeline from current env")
+                self._pipeline = Pipeline.from_config(config)
+                await self._pipeline.initialise()
+            return self._pipeline
 
     async def reset(self) -> None:
         async with self._lock:
-            if self._config is not None:
-                logger.info("AppState: clearing config so next call rebuilds")
-                self._config = None
+            if self._pipeline is not None:
+                logger.info("AppState: clearing pipeline so next call rebuilds")
+                await self._pipeline.close()
+                self._pipeline = None
 
 
 class CredentialsNotSet(RuntimeError):
