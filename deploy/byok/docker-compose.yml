@@ -29,6 +29,7 @@ services:
       NEO4J_URI: "bolt://neo4j:7687"
     volumes:
       - ../../src:/app/src
+      - whitespace_data:/app/data
 
   frontend:
     image: node:20-slim
@@ -43,3 +44,4 @@ services:
 
 volumes:
   neo4j_data:
+  whitespace_data:

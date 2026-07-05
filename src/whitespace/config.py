@@ -39,6 +39,9 @@ class Config(BaseSettings):
     dynamodb_usage_table: str = "whitespace-usage"
     aws_region: str = "us-east-1"
 
+    # Session store (BYOK — SQLite)
+    sqlite_db_path: str = "data/whitespace.db"
+
     # Observability
     langsmith_api_key: str = ""
     langsmith_project: str = ""

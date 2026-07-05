@@ -34,6 +34,8 @@ dependencies = [
     "firecrawl-py>=1.5,<3",
     # Model registry
     "pyyaml>=6,<7",
+    # Session store (BYOK)
+    "aiosqlite>=0.20,<1",
     # Observability
     "langsmith>=0.1.100,<1",
     # Auth (SaaS JWT validation)
@@ -78,6 +80,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["firecrawl", "firecrawl.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["aiosqlite", "aiosqlite.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
