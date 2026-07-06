@@ -50,3 +50,4 @@ deploy/aws/lambda_build/
 # Next.js artefacts
 .next/
 frontend/.next/
+*.tsbuildinfo
