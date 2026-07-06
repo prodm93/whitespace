@@ -1,12 +1,19 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from whitespace.config import Config
+from whitespace.domain import IngestResult
 from whitespace.observability.metrics import MetricsEmitter
 from whitespace.queue.base import JobQueue
 from whitespace.store.base import SessionStore
+
+if TYPE_CHECKING:
+    from whitespace.queue.local_queue import LocalAsyncQueue
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +59,75 @@ def _build_queue(config: Config) -> JobQueue:
     if config.mode == "byok":
         from whitespace.queue.local_queue import LocalAsyncQueue
 
-        return LocalAsyncQueue()
+        queue = LocalAsyncQueue()
+        _register_handlers(queue)
+        return queue
 
     from whitespace.queue.sqs_queue import SqsJobQueue
 
     return SqsJobQueue(config)
+
+
+def _register_handlers(queue: LocalAsyncQueue) -> None:
+    from typing import Any
+
+    from whitespace.api.state import (
+        CredentialsNotSet,
+        ProfileNotReady,
+        app_state,
+    )
+
+    async def handle_ingest(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            pipeline = await app_state.get_pipeline()
+        except CredentialsNotSet as exc:
+            raise RuntimeError(str(exc)) from exc
+
+        profile_paths: list[str] = payload.get("profile_paths", [])
+        domain_paths: list[str] = payload.get("domain_paths", [])
+
+        if profile_paths:
+            profile = await pipeline.extract_profile(profile_paths)
+            app_state.set_profile(profile)
+
+        all_paths = profile_paths + domain_paths
+        if all_paths:
+            result = await pipeline.ingest(all_paths)
+        else:
+            result = IngestResult(documents_processed=0)
+
+        return {"documents_processed": result.documents_processed}
+
+    async def handle_gaps(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            pipeline = await app_state.get_pipeline()
+        except CredentialsNotSet as exc:
+            raise RuntimeError(str(exc)) from exc
+        try:
+            profile = app_state.get_profile()
+        except ProfileNotReady as exc:
+            raise RuntimeError(str(exc)) from exc
+        needs = await pipeline.analyse_gaps(profile)
+        return {"needs": [n.model_dump() for n in needs]}
+
+    async def handle_ideation(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            pipeline = await app_state.get_pipeline()
+        except CredentialsNotSet as exc:
+            raise RuntimeError(str(exc)) from exc
+        try:
+            profile = app_state.get_profile()
+        except ProfileNotReady as exc:
+            raise RuntimeError(str(exc)) from exc
+        proposals = await pipeline.ideate(
+            payload["selected_needs"],
+            profile,
+        )
+        return {"proposals": [p.model_dump() for p in proposals]}
+
+    queue.register_handler("ingest", handle_ingest)
+    queue.register_handler("gap_analysis", handle_gaps)
+    queue.register_handler("ideation", handle_ideation)
 
 
 def _build_metrics(config: Config) -> MetricsEmitter:
