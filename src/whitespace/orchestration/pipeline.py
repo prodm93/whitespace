@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Self
 
 from whitespace.agents.context_agent import ContextAgent
+from whitespace.agents.profile_agent import ProfileAgent
 from whitespace.config import Config
 from whitespace.domain import IngestResult
 from whitespace.graph.graphiti_client import GraphitiClient
@@ -40,6 +41,7 @@ class Pipeline:
         neo4j: Neo4jClient,
         graphiti: GraphitiClient,
         context_agent: ContextAgent,
+        profile_agent: ProfileAgent,
         ingest_graph: IngestGraph,
         gap_council: GapCouncilGraph,
         ideation_council: IdeationCouncilGraph,
@@ -49,6 +51,7 @@ class Pipeline:
         self._neo4j = neo4j
         self._graphiti = graphiti
         self._context_agent = context_agent
+        self._profile_agent = profile_agent
         self._ingest = ingest_graph
         self._gap_council = gap_council
         self._ideation_council = ideation_council
@@ -79,6 +82,10 @@ class Pipeline:
 
     async def __aexit__(self, *_: object) -> None:
         await self.close()
+
+    async def extract_profile(self, doc_paths: list[str]) -> ProfessionalProfile:
+        logger.info("Pipeline.extract_profile: %d documents", len(doc_paths))
+        return await self._profile_agent.run(doc_paths)
 
     async def ingest(self, doc_paths: list[str]) -> IngestResult:
         logger.info("Pipeline.ingest: %d documents", len(doc_paths))
@@ -167,6 +174,7 @@ def _build_pipeline(
 
     ontology_agent = OntologyAgent(config, router, loader)
     graph_agent = GraphAgent(config, graphiti, loader)
+    profile_agent = ProfileAgent(config, router, loader)
     planner = RetrievalPlannerAgent(router, PLAYBOOK)
     context_agent = ContextAgent(config, graph_tools, planner)
     generator = GeneratorAgent(router)
@@ -183,6 +191,7 @@ def _build_pipeline(
         neo4j=neo4j,
         graphiti=graphiti,
         context_agent=context_agent,
+        profile_agent=profile_agent,
         ingest_graph=IngestGraph(ontology_agent, graph_agent),
         gap_council=GapCouncilGraph(
             gap_ideators,

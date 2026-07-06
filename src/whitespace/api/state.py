@@ -13,6 +13,7 @@ import logging
 
 from whitespace.config import Config
 from whitespace.orchestration.pipeline import Pipeline
+from whitespace.schemas.profile import ProfessionalProfile
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 class AppState:
     def __init__(self) -> None:
         self._pipeline: Pipeline | None = None
+        self._profile: ProfessionalProfile | None = None
         self._lock = asyncio.Lock()
 
     async def get_pipeline(self) -> Pipeline:
@@ -35,12 +37,25 @@ class AppState:
                 await self._pipeline.initialise()
             return self._pipeline
 
+    def set_profile(self, profile: ProfessionalProfile) -> None:
+        self._profile = profile
+
+    def get_profile(self) -> ProfessionalProfile:
+        if self._profile is None:
+            raise ProfileNotReady("Profile has not been extracted yet")
+        return self._profile
+
     async def reset(self) -> None:
         async with self._lock:
             if self._pipeline is not None:
                 logger.info("AppState: clearing pipeline so next call rebuilds")
                 await self._pipeline.close()
                 self._pipeline = None
+            self._profile = None
+
+
+class ProfileNotReady(RuntimeError):
+    pass
 
 
 class CredentialsNotSet(RuntimeError):
