@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 _OPENROUTER_MODEL_MAP: dict[str, str] = {
-    "anthropic.claude-opus-4-6-20260219-v1:0": "anthropic/claude-opus-4-6-20260219",
+    "anthropic.claude-opus-4-6-20260219-v1:0": "anthropic/claude-opus-4.6",
     "gpt-5.4": "openai/gpt-5.4",
-    "deepseek.deepseek-v3-2-v1:0": "deepseek/deepseek-v3-2",
-    "zai.glm-5": "zhipuai/glm-5",
-    "moonshot.kimi-k2-thinking": "moonshotai/kimi-k2",
+    "deepseek.deepseek-v3-2-v1:0": "deepseek/deepseek-v3.2",
+    "zai.glm-5": "z-ai/glm-5",
+    "moonshot.kimi-k2-thinking": "moonshotai/kimi-k2-thinking",
     "amazon.nova-2-micro-v1:0": "amazon/nova-micro-v1",
 }
 
