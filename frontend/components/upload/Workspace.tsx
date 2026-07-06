@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useCredentials } from "@/context/CredentialsContext";
 import type {
   GapAnalysisResponse,
   IdeationProposal,
@@ -33,6 +34,7 @@ function toUploadedFile(file: File): UploadedFile {
 }
 
 export default function Workspace() {
+  const { reset: resetCredentials } = useCredentials();
   const [profileFiles, setProfileFiles] = useState<UploadedFile[]>([]);
   const [domainFiles, setDomainFiles] = useState<UploadedFile[]>([]);
   const [domain, setDomain] = useState("");
@@ -141,8 +143,35 @@ export default function Workspace() {
     setJobId("");
   }, []);
 
+  const goToInput = useCallback(() => {
+    setPhase("input");
+    setJobId("");
+    setError("");
+  }, []);
+
+  const goToGapResults = useCallback(() => {
+    setPhase("gap-results");
+    setJobId("");
+  }, []);
+
+  let backAction: () => void;
+  let backLabel: string;
+
+  if (phase === "input") {
+    backAction = resetCredentials;
+    backLabel = "Credentials";
+  } else if (phase === "ideation-running" || phase === "ideation-results") {
+    backAction = goToGapResults;
+    backLabel = "Gap results";
+  } else {
+    backAction = goToInput;
+    backLabel = "Back";
+  }
+
+  let content: React.ReactNode;
+
   if (phase === "ingesting") {
-    return (
+    content = (
       <JobProgress
         jobId={jobId}
         jobType="ingest"
@@ -150,10 +179,8 @@ export default function Workspace() {
         onRetry={handleRetryIngest}
       />
     );
-  }
-
-  if (phase === "gap-running") {
-    return (
+  } else if (phase === "gap-running") {
+    content = (
       <JobProgress
         jobId={jobId}
         jobType="gaps"
@@ -161,20 +188,16 @@ export default function Workspace() {
         onRetry={handleRetryGaps}
       />
     );
-  }
-
-  if (phase === "gap-results") {
-    return (
+  } else if (phase === "gap-results") {
+    content = (
       <GapResults
         needs={needs}
         onIdeate={handleIdeate}
         submitting={ideateSubmitting}
       />
     );
-  }
-
-  if (phase === "ideation-running") {
-    return (
+  } else if (phase === "ideation-running") {
+    content = (
       <JobProgress
         jobId={jobId}
         jobType="ideation"
@@ -182,93 +205,122 @@ export default function Workspace() {
         onRetry={handleRetryIdeation}
       />
     );
-  }
+  } else if (phase === "ideation-results") {
+    content = <IdeationResults proposals={proposals} />;
+  } else {
+    content = (
+      <section className="workspace">
+        <div className="workspace__zones">
+          <DropZone
+            label="Your professional profile"
+            description="Upload your resume, CV, publications, or project descriptions. Multiple files build a richer profile."
+            files={profileFiles}
+            onAdd={addProfile}
+            onRemove={removeProfile}
+          />
+          <DropZone
+            label="Domain documents"
+            description="Optional. Patent PDFs, technical papers, or discovery write-ups to supplement the automated search."
+            files={domainFiles}
+            onAdd={addDomain}
+            onRemove={removeDomain}
+          />
+        </div>
 
-  if (phase === "ideation-results") {
-    return <IdeationResults proposals={proposals} />;
+        <SearchPanel
+          domain={domain}
+          cpcClass={cpcClass}
+          onDomainChange={setDomain}
+          onCpcChange={setCpcClass}
+        />
+
+        {error && <p className="workspace__error">{error}</p>}
+
+        <button
+          className="workspace__build"
+          onClick={handleBuild}
+          disabled={submitting}
+          type="button"
+        >
+          {submitting ? "Building…" : "Build knowledge graph"}
+        </button>
+
+        <style jsx>{`
+          .workspace {
+            padding: 48px var(--margin) 96px;
+            max-width: 960px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 36px;
+          }
+          .workspace__zones {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--gutter);
+          }
+          .workspace__error {
+            font-size: var(--text-caption);
+            color: #c25a5a;
+            text-align: center;
+          }
+          .workspace__build {
+            align-self: center;
+            padding: 16px 48px;
+            font-family: "Inter", sans-serif;
+            font-size: var(--text-body);
+            font-weight: 400;
+            color: var(--text-primary);
+            background: var(--accent);
+            border-radius: var(--radius-md);
+            transition: opacity 0.2s var(--ease-out),
+              box-shadow 0.2s var(--ease-out);
+          }
+          .workspace__build:hover:not(:disabled) {
+            box-shadow: 0 0 24px var(--accent-glow);
+          }
+          .workspace__build:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+          @media (max-width: 600px) {
+            .workspace__zones {
+              grid-template-columns: 1fr;
+            }
+          }
+        `}</style>
+      </section>
+    );
   }
 
   return (
-    <section className="workspace">
-      <div className="workspace__zones">
-        <DropZone
-          label="Your professional profile"
-          description="Upload your resume, CV, publications, or project descriptions. Multiple files build a richer profile."
-          files={profileFiles}
-          onAdd={addProfile}
-          onRemove={removeProfile}
-        />
-        <DropZone
-          label="Domain documents"
-          description="Optional. Patent PDFs, technical papers, or discovery write-ups to supplement the automated search."
-          files={domainFiles}
-          onAdd={addDomain}
-          onRemove={removeDomain}
-        />
-      </div>
-
-      <SearchPanel
-        domain={domain}
-        cpcClass={cpcClass}
-        onDomainChange={setDomain}
-        onCpcChange={setCpcClass}
-      />
-
-      {error && <p className="workspace__error">{error}</p>}
-
+    <>
       <button
-        className="workspace__build"
-        onClick={handleBuild}
-        disabled={submitting}
+        className="workspace__back"
+        onClick={backAction}
         type="button"
       >
-        {submitting ? "Building…" : "Build knowledge graph"}
+        &larr; {backLabel}
       </button>
-
+      {content}
       <style jsx>{`
-        .workspace {
-          padding: 48px var(--margin) 96px;
-          max-width: 960px;
-          margin: 0 auto;
-          display: flex;
-          flex-direction: column;
-          gap: 36px;
-        }
-        .workspace__zones {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: var(--gutter);
-        }
-        .workspace__error {
-          font-size: var(--text-caption);
-          color: #c25a5a;
-          text-align: center;
-        }
-        .workspace__build {
-          align-self: center;
-          padding: 16px 48px;
+        .workspace__back {
+          position: fixed;
+          top: 80px;
+          left: var(--margin);
           font-family: "Inter", sans-serif;
-          font-size: var(--text-body);
-          font-weight: 400;
+          font-size: var(--text-caption);
+          color: var(--text-muted);
+          background: none;
+          border: none;
+          cursor: pointer;
+          z-index: 10;
+          transition: color 0.2s var(--ease-out);
+        }
+        .workspace__back:hover {
           color: var(--text-primary);
-          background: var(--accent);
-          border-radius: var(--radius-md);
-          transition: opacity 0.2s var(--ease-out),
-            box-shadow 0.2s var(--ease-out);
-        }
-        .workspace__build:hover:not(:disabled) {
-          box-shadow: 0 0 24px var(--accent-glow);
-        }
-        .workspace__build:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        @media (max-width: 600px) {
-          .workspace__zones {
-            grid-template-columns: 1fr;
-          }
         }
       `}</style>
-    </section>
+    </>
   );
 }

@@ -200,7 +200,7 @@ export default function Hero() {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 80px var(--margin) 48px;
+          padding: 80px var(--margin) 24px;
           overflow: hidden;
         }
         .hero__inner {
