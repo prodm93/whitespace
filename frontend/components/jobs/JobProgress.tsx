@@ -77,46 +77,56 @@ export default function JobProgress({
       <svg
         ref={svgRef}
         className="job-progress__svg"
-        viewBox="0 0 200 120"
+        viewBox="0 0 400 240"
         aria-hidden="true"
       >
-        {/* Nodes */}
-        <circle className="graph-dot" cx="30" cy="60" r="3.5" fill="var(--text-primary)" />
-        <circle className="graph-dot" cx="100" cy="28" r="3" fill="var(--text-primary)" />
-        <circle className="graph-dot" cx="100" cy="92" r="3" fill="var(--text-primary)" />
-        <circle className="graph-dot" cx="170" cy="60" r="3.5" fill="var(--text-primary)" />
-
         {/* Edges */}
-        <path
-          className="graph-edge"
-          d="M 30,60 C 55,30 75,28 100,28"
-          fill="none"
-          stroke="var(--stroke-cream)"
-          strokeWidth="1"
-        />
-        <path
-          className="graph-edge"
-          d="M 30,60 C 55,90 75,92 100,92"
-          fill="none"
-          stroke="var(--stroke-cream)"
-          strokeWidth="1"
-        />
-        <path
-          className="graph-edge"
-          d="M 100,28 C 125,28 145,40 170,60"
-          fill="none"
-          stroke="var(--stroke-cream)"
-          strokeWidth="1"
-        />
-        <path
-          className="graph-edge"
-          d="M 100,92 C 125,92 145,80 170,60"
-          fill="none"
-          stroke="var(--stroke-cream)"
-          strokeWidth="1"
-        />
+        <path className="graph-edge" d="M 52,108 L 108,45" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 52,108 L 85,162" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 52,108 L 160,72" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 52,108 L 168,138" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 108,45 L 160,72" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 85,162 L 168,138" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 85,162 L 125,192" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 160,72 L 168,138" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 160,72 L 228,48" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 168,138 L 125,192" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 168,138 L 242,118" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 168,138 L 205,182" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 228,48 L 242,118" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 228,48 L 302,78" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 242,118 L 302,78" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 242,118 L 205,182" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 205,182 L 125,192" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 302,78 L 348,48" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 302,78 L 352,135" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+        <path className="graph-edge" d="M 348,48 L 352,135" fill="none" stroke="var(--stroke-cream)" strokeWidth="1" />
+
+        {/* Nodes */}
+        <circle className="graph-dot" cx="52" cy="108" r="3.5" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="108" cy="45" r="3" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="85" cy="162" r="3" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="160" cy="72" r="3" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="168" cy="138" r="3.5" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="125" cy="192" r="3" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="228" cy="48" r="3" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="242" cy="118" r="3" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="205" cy="182" r="3" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="302" cy="78" r="3.5" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="348" cy="48" r="3" fill="var(--text-primary)" />
+        <circle className="graph-dot" cx="352" cy="135" r="3" fill="var(--text-primary)" />
+
+        {/* Hidden route paths — travellers circulate across multiple edges */}
+        <path className="graph-route" d="M 52,108 L 108,45 L 160,72 L 228,48 L 302,78 L 348,48" fill="none" stroke="none" />
+        <path className="graph-route" d="M 52,108 L 85,162 L 125,192 L 205,182 L 242,118 L 302,78 L 352,135" fill="none" stroke="none" />
+        <path className="graph-route" d="M 52,108 L 160,72 L 168,138 L 242,118 L 228,48 L 302,78" fill="none" stroke="none" />
+        <path className="graph-route" d="M 168,138 L 125,192 L 85,162 L 52,108 L 108,45 L 160,72" fill="none" stroke="none" />
+        <path className="graph-route" d="M 168,138 L 205,182 L 242,118 L 302,78 L 348,48 L 352,135" fill="none" stroke="none" />
+        <path className="graph-route" d="M 52,108 L 168,138 L 242,118 L 205,182 L 125,192 L 85,162" fill="none" stroke="none" />
 
         {/* Travelling dots */}
+        <circle className="graph-traveller" r="2" fill="var(--accent)" opacity="0" />
+        <circle className="graph-traveller" r="2" fill="var(--accent)" opacity="0" />
         <circle className="graph-traveller" r="2" fill="var(--accent)" opacity="0" />
         <circle className="graph-traveller" r="2" fill="var(--accent)" opacity="0" />
         <circle className="graph-traveller" r="2" fill="var(--accent)" opacity="0" />
@@ -148,14 +158,14 @@ export default function JobProgress({
           flex-direction: column;
           align-items: center;
           gap: 20px;
-          padding: 64px var(--margin);
+          padding: 32px var(--margin);
           max-width: 480px;
           margin: 0 auto;
           text-align: center;
         }
         .job-progress__svg {
-          width: 200px;
-          height: 120px;
+          width: 400px;
+          height: 240px;
         }
         .job-progress__label {
           font-family: "Cormorant Garamond", Georgia, serif;

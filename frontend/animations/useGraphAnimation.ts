@@ -24,17 +24,18 @@ export function useGraphAnimation() {
       return;
     }
 
-    const paths = svg.querySelectorAll<SVGPathElement>(".graph-edge");
+    const edges = svg.querySelectorAll<SVGPathElement>(".graph-edge");
+    const routes = svg.querySelectorAll<SVGPathElement>(".graph-route");
     const travellers = svg.querySelectorAll(".graph-traveller");
     const dots = svg.querySelectorAll(".graph-dot");
 
     const tweens: gsap.core.Tween[] = [];
 
-    paths.forEach((path) => {
-      const len = path.getTotalLength();
-      gsap.set(path, { strokeDasharray: len, strokeDashoffset: len });
+    edges.forEach((edge) => {
+      const len = edge.getTotalLength();
+      gsap.set(edge, { strokeDasharray: len, strokeDashoffset: len });
       tweens.push(
-        gsap.to(path, {
+        gsap.to(edge, {
           strokeDashoffset: 0,
           duration: 1.6,
           ease: "power2.inOut",
@@ -67,23 +68,24 @@ export function useGraphAnimation() {
     });
 
     travellers.forEach((traveller, i) => {
-      const path = paths[i % paths.length];
-      if (!path) return;
+      const route = routes[i % routes.length];
+      if (!route) return;
       gsap.set(traveller, { opacity: 0 });
       tweens.push(
-        gsap.to(traveller, { opacity: 1, duration: 0.3, delay: 1 }),
+        gsap.to(traveller, { opacity: 1, duration: 0.3, delay: 1.5 }),
       );
       tweens.push(
         gsap.to(traveller, {
           motionPath: {
-            path,
-            align: path,
+            path: route,
+            align: route,
             alignOrigin: [0.5, 0.5],
           },
-          duration: 3 + i * 0.5,
+          duration: 6 + i * 1.5,
           repeat: -1,
+          yoyo: true,
           ease: "none",
-          delay: 1,
+          delay: 1.5 + i * 0.8,
         }),
       );
     });
