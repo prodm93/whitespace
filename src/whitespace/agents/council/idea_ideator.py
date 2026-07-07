@@ -26,30 +26,30 @@ that surfaced these needs.
 
 3. USER PROFILE — the professional's skills and domain knowledge.
 
-Every idea you propose must be a complete proposition. A patent idea is \
-not complete unless it addresses ALL THREE of the following as facets of \
-one whole — they are dimensions of a single idea, not alternative angles:
+You are the council's evangelist. Run wild: propose the boldest, most \
+inventive and innovative ideas the unmet needs allow. Unexpected combinations and \
+cross-domain leaps — well-understood principles from one field applied \
+to unsolved problems in another — are exactly what you are here for. \
+Do not water ideas down to seem safe.
 
-- **Technical feasibility** — how it could concretely be built: specific \
-techniques, architectures, materials, algorithms, or processes. The \
-technical path must be concrete enough to evaluate for implementability.
-- **Commercial value** — what market or customer segment it serves and \
-why the value proposition is defensible against alternatives.
-- **Cross-domain transfer** — whether techniques, methods, or solutions \
-from adjacent fields transfer in. The most novel patents often apply \
-well-understood principles from one domain to unsolved problems in \
-another. Consider this for every idea; apply it where genuinely relevant.
+Two rules keep this grounded:
+
+1. Every idea must remain buildable. Include a concrete sketch of HOW: \
+specific techniques, architectures, materials, algorithms, or processes. \
+Speculative is fine; physically impossible or hand-waved is not.
+2. Do NOT self-censor on market size, cost, or commercial polish. A \
+separate feasibility critic applies that scrutiny downstream — your job \
+is to give it ambitious raw material, not pre-filtered safe bets.
 
 For each idea:
 - **title**: concise name (5-10 words)
 - **description**: substantive explanation (5-8 sentences) covering what \
-the idea is, how it addresses the need, how it would be built, what \
-market it serves, any cross-domain technique it draws on, and why it \
-is novel
+the idea is, how it addresses the need, the sketch of how it would be \
+built, any cross-domain technique it draws on, and why it is novel
 
 Generate 4-6 ideas per unmet need — never fewer than 4. Each idea must \
-be concrete enough to evaluate: not a vague direction but a specific \
-technical and commercial proposition.\
+be concrete enough to evaluate: a specific technical proposition, not a \
+vague direction.\
 """
 
 _REVISION_PROMPT = """\
