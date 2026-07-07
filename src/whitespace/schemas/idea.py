@@ -7,11 +7,11 @@ class CandidateIdea(BaseModel):
         ..., description="What the idea is and how it addresses the unmet need"
     )
     source_model: str = Field(..., description="Model ID that generated this idea")
-    framing: str = Field(
-        ...,
-        description=(
-            "Perspective: technical_feasibility, commercial_value, or cross_domain_transfer"
-        ),
+    candidate_id: str = Field(
+        default="", description="Stable ID assigned by the council for critic referencing"
+    )
+    source_role: str = Field(
+        default="", description="Registry role of the ideator that produced this idea"
     )
 
 
@@ -35,6 +35,18 @@ class IdeationProposal(BaseModel):
     prior_art_notes: str | None = Field(
         default=None,
         description="Similar prior art found during novelty validation, if any",
+    )
+    scores: dict[str, int] = Field(
+        default_factory=dict,
+        description="Critic scores (1-10 per criterion) from council review",
+    )
+    contributing_models: list[str] = Field(
+        default_factory=list,
+        description="Model IDs whose candidates contributed to this proposal",
+    )
+    critique_notes: str | None = Field(
+        default=None,
+        description="Critic objections or caveats retained for provenance",
     )
 
 

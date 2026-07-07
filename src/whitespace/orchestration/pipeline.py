@@ -129,7 +129,7 @@ def _build_pipeline(
     registry_path: Path | None,
 ) -> Pipeline:
     from whitespace.agents.council.gap_critic import GapCritic
-    from whitespace.agents.council.gap_ideator import GapIdeator
+    from whitespace.agents.council.gap_identifier import GapIdentifier
     from whitespace.agents.council.gap_synthesiser import GapSynthesiser
     from whitespace.agents.council.idea_critic import IdeaCritic
     from whitespace.agents.council.idea_ideator import IdeaIdeator
@@ -179,12 +179,8 @@ def _build_pipeline(
     context_agent = ContextAgent(config, graph_tools, planner)
     generator = GeneratorAgent(router)
 
-    gap_ideators = [GapIdeator(config, router, f"gap_ideator_{i}") for i in range(1, 4)]
-    idea_ideators = [
-        IdeaIdeator(config, router, "idea_ideator_technical", "technical_feasibility"),
-        IdeaIdeator(config, router, "idea_ideator_commercial", "commercial_value"),
-        IdeaIdeator(config, router, "idea_ideator_crossdomain", "cross_domain_transfer"),
-    ]
+    gap_identifiers = [GapIdentifier(config, router, f"gap_identifier_{i}") for i in range(1, 4)]
+    idea_ideators = [IdeaIdeator(config, router, f"idea_ideator_{i}") for i in range(1, 4)]
 
     return cls(
         config=config,
@@ -194,7 +190,7 @@ def _build_pipeline(
         profile_agent=profile_agent,
         ingest_graph=IngestGraph(ontology_agent, graph_agent),
         gap_council=GapCouncilGraph(
-            gap_ideators,
+            gap_identifiers,
             GapCritic(config, router),
             GapSynthesiser(config, router),
         ),

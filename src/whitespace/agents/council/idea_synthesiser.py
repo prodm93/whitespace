@@ -1,13 +1,14 @@
-"""Refines top-ranked candidate ideas into full IdeationProposal objects."""
+"""Refines surviving candidate ideas into full IdeationProposal objects."""
 
 from __future__ import annotations
 
 import json
 import logging
 
-from whitespace.agents.council._helpers import format_profile
+from whitespace.agents.council._helpers import format_for_synthesis, format_profile
 from whitespace.config import Config
 from whitespace.models.router import ModelRouter
+from whitespace.schemas.critique import CriticReport
 from whitespace.schemas.idea import CandidateIdea, IdeationProposal
 from whitespace.schemas.profile import ProfessionalProfile
 
@@ -16,13 +17,27 @@ logger = logging.getLogger(__name__)
 _SYSTEM_PROMPT = """\
 You are a patent proposal writer. You will receive:
 
-1. RANKED IDEAS — candidate ideas already scored and ranked by a critic.
+1. SURVIVING CANDIDATES — candidate ideas that passed council review, \
+ranked best-first. Each carries its ID, its original text, and the \
+critic's guidance: scores, notes, sometimes a developed version, and \
+sometimes candidates to combine with.
 
 2. GRAPH CONTEXT — structured facts and excerpts from the knowledge graph.
 
 3. USER PROFILE — the professional's skills and domain knowledge.
 
-For each idea, produce a fully fleshed-out proposal:
+Synthesis rules:
+- Work from the ORIGINAL candidate text; use the critic's developed \
+version and notes as guidance for strengthening, not as a replacement \
+to copy.
+- Where the critic marked candidates to combine ("Combine with"), \
+cross-synthesise them into ONE proposal that keeps the strongest \
+material from each — mitigate information loss; do not flatten \
+details away.
+- Preserve the input ranking order. Do not add new ideas and do not \
+resurrect anything not listed.
+
+For each entry, produce a fully fleshed-out proposal:
 
 - **title**: keep or lightly refine the existing title
 - **problem_statement**: the unmet need this addresses and why it matters \
@@ -38,8 +53,8 @@ challenges (2-3 sentences)
 - **provenance**: list the graph paths or source references that support \
 this idea, formatted as "[SOURCE → EDGE_TYPE → TARGET]" or \
 "source: <document name>"
-
-Preserve the input ranking order. Do not add new ideas.\
+- **source_candidate_ids**: the IDs of every candidate this proposal \
+drew from — the ranked anchor plus any combined candidates\
 """
 
 _RESPONSE_FORMAT = {
@@ -67,6 +82,10 @@ _RESPONSE_FORMAT = {
                                 "type": "array",
                                 "items": {"type": "string"},
                             },
+                            "source_candidate_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
                         },
                         "required": [
                             "title",
@@ -76,6 +95,7 @@ _RESPONSE_FORMAT = {
                             "differentiation_from_prior_art",
                             "limitations",
                             "provenance",
+                            "source_candidate_ids",
                         ],
                         "additionalProperties": False,
                     },
@@ -88,15 +108,8 @@ _RESPONSE_FORMAT = {
 }
 
 
-def _format_ideas(ideas: list[CandidateIdea]) -> str:
-    lines: list[str] = []
-    for i, idea in enumerate(ideas, 1):
-        lines.append(f"{i}. **{idea.title}**: {idea.description}")
-    return "\n".join(lines)
-
-
 class IdeaSynthesiser:
-    """Refines ranked candidate ideas into full IdeationProposal objects."""
+    """Refines surviving candidate ideas into full IdeationProposal objects."""
 
     def __init__(self, config: Config, router: ModelRouter) -> None:
         self._config = config
@@ -104,19 +117,17 @@ class IdeaSynthesiser:
 
     async def run(
         self,
-        ranked_ideas: list[CandidateIdea],
+        pool: list[CandidateIdea],
+        report: CriticReport,
         graph_context: str,
         profile: ProfessionalProfile,
     ) -> list[IdeationProposal]:
-        logger.info(
-            "IdeaSynthesiser: refining %d ideas into proposals",
-            len(ranked_ideas),
-        )
-        if not ranked_ideas:
+        logger.info("IdeaSynthesiser: synthesising %d survivors", len(report.ranking))
+        if not report.ranking:
             return []
 
         user_msg = (
-            f"## RANKED IDEAS\n\n{_format_ideas(ranked_ideas)}\n\n"
+            f"## SURVIVING CANDIDATES\n\n{format_for_synthesis(pool, report)}\n\n"
             f"## GRAPH CONTEXT\n\n{graph_context}\n\n"
             f"## USER PROFILE\n\n{format_profile(profile)}"
         )
@@ -130,9 +141,23 @@ class IdeaSynthesiser:
             response_format=_RESPONSE_FORMAT,
         )
         parsed = json.loads(result["content"])
-        proposals = [IdeationProposal.model_validate(p) for p in parsed.get("proposals", [])]
-        logger.info(
-            "IdeaSynthesiser: produced %d full proposals",
-            len(proposals),
-        )
+        by_id = {c.candidate_id: c for c in pool}
+        proposals: list[IdeationProposal] = []
+        for item in parsed.get("proposals", []):
+            source_ids: list[str] = item.pop("source_candidate_ids", [])
+            assessment = report.assessment_for(source_ids[0]) if source_ids else None
+            models: list[str] = []
+            for cid in source_ids:
+                candidate = by_id.get(cid)
+                if candidate is not None and candidate.source_model not in models:
+                    models.append(candidate.source_model)
+            proposals.append(
+                IdeationProposal(
+                    **item,
+                    scores=assessment.scores if assessment else {},
+                    contributing_models=models,
+                    critique_notes=assessment.objections if assessment else None,
+                )
+            )
+        logger.info("IdeaSynthesiser: produced %d full proposals", len(proposals))
         return proposals

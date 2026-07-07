@@ -6,6 +6,7 @@ import json
 import logging
 
 from whitespace.agents.council._helpers import format_profile
+from whitespace.agents.council._revision import request_revisions
 from whitespace.config import Config
 from whitespace.models.router import ModelRouter
 from whitespace.schemas.gap import CandidateGap
@@ -38,7 +39,8 @@ For each gap, provide:
 what the gap is, why it matters, and what evidence from the context \
 supports its existence
 
-Aim for 5-8 candidate gaps. Prefer specificity over breadth — \
+Aim for 5-8 candidate gaps — never fewer than 4. Prefer specificity \
+over breadth — \
 "lack of real-time corrosion monitoring in subsea pipelines" is better \
 than "need for better monitoring". Ground every gap in something \
 concrete from the context.\
@@ -72,12 +74,28 @@ _RESPONSE_FORMAT = {
 }
 
 
-class GapIdeator:
+_REVISION_PROMPT = """\
+You are a patent-landscape analyst revising your own earlier candidate \
+gaps. A council critic reviewed them and returned specific feedback on \
+each.
+
+For each candidate below, produce a revised version that addresses the \
+critic's feedback: sharpen specificity, strengthen the evidence from the \
+graph context, and deepen the connection to the user's profile. Keep \
+what was already strong. Do not change the subject of a candidate — \
+develop it.
+
+Return exactly one revised gap per candidate, in the same order, with \
+the same output shape: title and description.\
+"""
+
+
+class GapIdentifier:
     """Identifies candidate unmet needs from graph context + user profile.
 
     Runs independently — the council graph fans out to multiple instances,
     each assigned a different model by the router. This agent does not know
-    about other ideators.
+    about other identifiers.
     """
 
     def __init__(
@@ -90,12 +108,16 @@ class GapIdeator:
         self._router = router
         self._role_name = role_name
 
+    @property
+    def role_name(self) -> str:
+        return self._role_name
+
     async def run(
         self,
         graph_context: str,
         profile: ProfessionalProfile,
     ) -> list[CandidateGap]:
-        logger.info("GapIdeator[%s]: analysing context", self._role_name)
+        logger.info("GapIdentifier[%s]: analysing context", self._role_name)
         user_msg = (
             f"## GRAPH CONTEXT\n\n{graph_context}\n\n## USER PROFILE\n\n{format_profile(profile)}"
         )
@@ -119,9 +141,42 @@ class GapIdeator:
             for g in parsed.get("gaps", [])
         ]
         logger.info(
-            "GapIdeator[%s]: surfaced %d candidate gaps via %s",
+            "GapIdentifier[%s]: surfaced %d candidate gaps via %s",
             self._role_name,
             len(gaps),
             model_id,
         )
         return gaps
+
+    async def revise(
+        self,
+        flagged: list[tuple[CandidateGap, str]],
+        graph_context: str,
+        profile: ProfessionalProfile,
+    ) -> list[CandidateGap]:
+        """Revise this identifier's own candidates per the critic's feedback."""
+        logger.info(
+            "GapIdentifier[%s]: revising %d flagged candidates",
+            self._role_name,
+            len(flagged),
+        )
+        model_id, items = await request_revisions(
+            self._router,
+            role=self._role_name,
+            system_prompt=_REVISION_PROMPT,
+            response_format=_RESPONSE_FORMAT,
+            response_key="gaps",
+            flagged=flagged,
+            graph_context=graph_context,
+            profile=profile,
+        )
+        return [
+            CandidateGap(
+                title=item["title"],
+                description=item["description"],
+                source_model=model_id,
+                candidate_id=original.candidate_id,
+                source_role=original.source_role,
+            )
+            for (original, _), item in zip(flagged, items, strict=False)
+        ]

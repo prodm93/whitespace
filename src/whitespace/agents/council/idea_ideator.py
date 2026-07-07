@@ -6,6 +6,7 @@ import json
 import logging
 
 from whitespace.agents.council._helpers import format_needs, format_profile
+from whitespace.agents.council._revision import request_revisions
 from whitespace.config import Config
 from whitespace.models.router import ModelRouter
 from whitespace.schemas.gap import UnmetNeed
@@ -14,7 +15,7 @@ from whitespace.schemas.profile import ProfessionalProfile
 
 logger = logging.getLogger(__name__)
 
-_BASE_PROMPT = """\
+_SYSTEM_PROMPT = """\
 You are a patent ideation specialist. You will receive:
 
 1. SELECTED NEEDS — unmet needs in the patent landscape that the user \
@@ -25,41 +26,46 @@ that surfaced these needs.
 
 3. USER PROFILE — the professional's skills and domain knowledge.
 
-{framing_instruction}
+Every idea you propose must be a complete proposition. A patent idea is \
+not complete unless it addresses ALL THREE of the following as facets of \
+one whole — they are dimensions of a single idea, not alternative angles:
+
+- **Technical feasibility** — how it could concretely be built: specific \
+techniques, architectures, materials, algorithms, or processes. The \
+technical path must be concrete enough to evaluate for implementability.
+- **Commercial value** — what market or customer segment it serves and \
+why the value proposition is defensible against alternatives.
+- **Cross-domain transfer** — whether techniques, methods, or solutions \
+from adjacent fields transfer in. The most novel patents often apply \
+well-understood principles from one domain to unsolved problems in \
+another. Consider this for every idea; apply it where genuinely relevant.
 
 For each idea:
 - **title**: concise name (5-10 words)
-- **description**: substantive explanation (4-6 sentences) covering the \
-idea, how it addresses the need, and why it is novel
+- **description**: substantive explanation (5-8 sentences) covering what \
+the idea is, how it addresses the need, how it would be built, what \
+market it serves, any cross-domain technique it draws on, and why it \
+is novel
 
-Aim for 2-4 ideas per unmet need. Each idea must be concrete enough to \
-evaluate — not a vague direction but a specific technical or commercial \
-proposition.\
+Generate 4-6 ideas per unmet need — never fewer than 4. Each idea must \
+be concrete enough to evaluate: not a vague direction but a specific \
+technical and commercial proposition.\
 """
 
-_FRAMING_INSTRUCTIONS: dict[str, str] = {
-    "technical_feasibility": (
-        "Your framing is **technical feasibility**. For each unmet need, "
-        "propose ideas focusing on HOW they could be built: specific "
-        "techniques, architectures, materials, algorithms, or processes. "
-        "Favour ideas whose technical path is concrete enough to evaluate "
-        "for implementability."
-    ),
-    "commercial_value": (
-        "Your framing is **commercial value**. For each unmet need, "
-        "propose ideas focusing on WHAT MARKET they serve: customer "
-        "segments, business models, competitive advantages, and market "
-        "gaps. Favour ideas with clear commercial potential and "
-        "defensible value propositions."
-    ),
-    "cross_domain_transfer": (
-        "Your framing is **cross-domain transfer**. For each unmet need, "
-        "look for techniques, methods, or solutions from ADJACENT FIELDS "
-        "that could be adapted. The most novel patents often apply well-"
-        "understood principles from one domain to unsolved problems in "
-        "another. Favour unexpected connections."
-    ),
-}
+_REVISION_PROMPT = """\
+You are a patent ideation specialist revising your own earlier candidate \
+ideas. A council critic reviewed them and returned specific feedback on \
+each.
+
+For each candidate below, produce a revised version that addresses the \
+critic's feedback: make the technical path more concrete, sharpen the \
+commercial case, or follow up the cross-domain angle it flagged. Keep \
+what was already strong. Do not change the subject of a candidate — \
+develop it.
+
+Return exactly one revised idea per candidate, in the same order, with \
+the same output shape: title and description.\
+"""
 
 _RESPONSE_FORMAT = {
     "type": "json_schema",
@@ -92,9 +98,9 @@ _RESPONSE_FORMAT = {
 class IdeaIdeator:
     """Generates candidate ideas for selected unmet needs.
 
-    Each instance uses a different framing (technical, commercial,
-    cross-domain) and a different model via the router, producing
-    genuinely diverse proposals.
+    All instances share one prompt; each is assigned a different model
+    by the router (via its registry role), so diversity comes from
+    genuine differences between models rather than prompt variation.
     """
 
     def __init__(
@@ -102,17 +108,14 @@ class IdeaIdeator:
         config: Config,
         router: ModelRouter,
         role_name: str,
-        framing: str,
     ) -> None:
-        if framing not in _FRAMING_INSTRUCTIONS:
-            raise ValueError(f"Unknown framing: {framing!r}")
         self._config = config
         self._router = router
         self._role_name = role_name
-        self._framing = framing
-        self._system_prompt = _BASE_PROMPT.format(
-            framing_instruction=_FRAMING_INSTRUCTIONS[framing],
-        )
+
+    @property
+    def role_name(self) -> str:
+        return self._role_name
 
     async def run(
         self,
@@ -121,9 +124,8 @@ class IdeaIdeator:
         profile: ProfessionalProfile,
     ) -> list[CandidateIdea]:
         logger.info(
-            "IdeaIdeator[%s/%s]: ideating on %d needs",
+            "IdeaIdeator[%s]: ideating on %d needs",
             self._role_name,
-            self._framing,
             len(selected_needs),
         )
         user_msg = (
@@ -134,10 +136,10 @@ class IdeaIdeator:
         result = await self._router.call(
             role=self._role_name,
             messages=[
-                {"role": "system", "content": self._system_prompt},
+                {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
             ],
-            temperature=0.7,
+            temperature=0.9,
             response_format=_RESPONSE_FORMAT,
         )
         model_id = result["model_id"]
@@ -147,15 +149,46 @@ class IdeaIdeator:
                 title=item["title"],
                 description=item["description"],
                 source_model=model_id,
-                framing=self._framing,
             )
             for item in parsed.get("ideas", [])
         ]
         logger.info(
-            "IdeaIdeator[%s/%s]: generated %d ideas via %s",
+            "IdeaIdeator[%s]: generated %d ideas via %s",
             self._role_name,
-            self._framing,
             len(ideas),
             model_id,
         )
         return ideas
+
+    async def revise(
+        self,
+        flagged: list[tuple[CandidateIdea, str]],
+        graph_context: str,
+        profile: ProfessionalProfile,
+    ) -> list[CandidateIdea]:
+        """Revise this ideator's own candidates per the critic's feedback."""
+        logger.info(
+            "IdeaIdeator[%s]: revising %d flagged candidates",
+            self._role_name,
+            len(flagged),
+        )
+        model_id, items = await request_revisions(
+            self._router,
+            role=self._role_name,
+            system_prompt=_REVISION_PROMPT,
+            response_format=_RESPONSE_FORMAT,
+            response_key="ideas",
+            flagged=flagged,
+            graph_context=graph_context,
+            profile=profile,
+        )
+        return [
+            CandidateIdea(
+                title=item["title"],
+                description=item["description"],
+                source_model=model_id,
+                candidate_id=original.candidate_id,
+                source_role=original.source_role,
+            )
+            for (original, _), item in zip(flagged, items, strict=False)
+        ]
