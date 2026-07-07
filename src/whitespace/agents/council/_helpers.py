@@ -53,8 +53,8 @@ def format_pool(candidates: Sequence[CandidateLike]) -> str:
 def format_for_synthesis(pool: Sequence[CandidateLike], report: CriticReport) -> str:
     """Render ranked survivors with full original text plus critic guidance.
 
-    The synthesiser always sees the originals — the critic curates by ID
-    and never becomes a lossy rewrite bottleneck.
+    The critic's merged or developed text is the primary version; the
+    originals ride along underneath for provenance.
     """
     by_id = {c.candidate_id: c for c in pool}
     sections: list[str] = []
@@ -63,23 +63,26 @@ def format_for_synthesis(pool: Sequence[CandidateLike], report: CriticReport) ->
         if candidate is None:
             continue
         assessment = report.assessment_for(cid)
-        lines = [
-            f"{rank}. [{cid}] **{candidate.title}** (source model: {candidate.source_model})",
-            f"   {candidate.description}",
-        ]
+        lines = [f"{rank}. [{cid}] **{candidate.title}** (source model: {candidate.source_model})"]
+        primary = None
+        if assessment:
+            primary = assessment.merged_description or assessment.developed_description
+        if primary:
+            lines.append(f"   Final version (critic-authored): {primary}")
+            lines.append(f"   Original for provenance: {candidate.description}")
+        else:
+            lines.append(f"   {candidate.description}")
         if assessment:
             if assessment.scores:
                 scored = ", ".join(f"{k}: {v}" for k, v in assessment.scores.items())
                 lines.append(f"   Critic scores: {scored}")
             if assessment.objections:
                 lines.append(f"   Critic notes: {assessment.objections}")
-            if assessment.developed_description:
-                lines.append(f"   Critic's developed version: {assessment.developed_description}")
             for merge_id in assessment.merge_with:
                 merged = by_id.get(merge_id)
                 if merged is not None:
                     lines.append(
-                        f"   Combine with [{merge_id}] **{merged.title}** "
+                        f"   Merged from [{merge_id}] **{merged.title}** "
                         f"(source model: {merged.source_model}): {merged.description}"
                     )
         sections.append("\n".join(lines))

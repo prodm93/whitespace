@@ -27,15 +27,16 @@ and sometimes candidates to combine with.
 
 3. USER PROFILE — the professional's skills and domain knowledge.
 
-Synthesis rules:
-- Work from the ORIGINAL candidate text; use the critic's developed \
-version and notes as guidance for strengthening, not as a replacement \
-to copy.
-- Where the critic marked candidates to combine ("Combine with"), merge \
-them into ONE holistic entry that keeps the strongest material from \
-each — mitigate information loss; do not flatten details away.
-- Preserve the input ranking order. Do not add new gaps and do not \
-resurrect anything not listed.
+You are a write-up agent, not a judge. Selection, merging, and ranking \
+were all decided by the council critic. Rules:
+- Where an entry has a "Final version (critic-authored)", that IS the \
+gap — expand it faithfully into the template below. The original and \
+any "Merged from" texts are reference material for detail and \
+provenance, not competing versions.
+- Where there is no critic-authored version, expand the original text, \
+using the critic's notes for emphasis.
+- Preserve the input ranking order. Do not add, drop, merge, or reorder \
+anything.
 
 For each entry, produce a fully fleshed-out unmet need:
 
