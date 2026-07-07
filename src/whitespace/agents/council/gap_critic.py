@@ -32,10 +32,13 @@ yourself. Do not default to either option.
 
 Duplicates: keep the strongest version and kill the rest, noting the \
 overlap in objections. Complementary candidates (NOT duplicates) from \
-different models that would combine into one stronger gap: give the \
-strongest verdict keep, list the others' IDs in its merge_with, and mark \
-those others keep too (their text must survive to synthesis) — but the \
-combination appears once in the ranking, via the strongest candidate.
+different models that would combine into one stronger gap: YOU author \
+the cross-synthesis. Give the strongest verdict keep, list the \
+partners' IDs in merge_with, and write the combined gap yourself in \
+merged_description — keeping the strongest evidence and material from \
+every partner. Mark the partners keep so their originals survive for \
+provenance; the combination appears once in the ranking, via the \
+anchor candidate.
 
 Score every candidate 1-10 on: novelty, specificity, evidence_strength, \
 profile_relevance.
@@ -43,8 +46,10 @@ profile_relevance.
 ranking: the IDs of surviving candidates (keep and develop_self, \
 excluding candidates absorbed into a merge), best first.
 
-You never rewrite candidates — you curate by ID. The original texts \
-flow to synthesis untouched alongside your report.\
+Your merged and developed texts become the definitive versions. The \
+downstream write-up agent expands them into report format — it \
+exercises no judgment, so anything you want in the final output must \
+be in your text or the original.\
 """
 
 

@@ -34,6 +34,7 @@ def build_critic_response_format(name: str, score_keys: tuple[str, ...]) -> dict
             "feedback_for_originator": {"type": ["string", "null"]},
             "developed_description": {"type": ["string", "null"]},
             "merge_with": {"type": "array", "items": {"type": "string"}},
+            "merged_description": {"type": ["string", "null"]},
         },
         "required": [
             "candidate_id",
@@ -43,6 +44,7 @@ def build_critic_response_format(name: str, score_keys: tuple[str, ...]) -> dict
             "feedback_for_originator",
             "developed_description",
             "merge_with",
+            "merged_description",
         ],
         "additionalProperties": False,
     }

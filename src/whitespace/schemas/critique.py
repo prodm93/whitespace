@@ -47,9 +47,13 @@ class CriticAssessment(BaseModel):
     )
     merge_with: list[str] = Field(
         default_factory=list,
+        description=("IDs of complementary candidates the critic cross-synthesised into this one"),
+    )
+    merged_description: str | None = Field(
+        default=None,
         description=(
-            "IDs of complementary candidates from other models to combine "
-            "with this one during synthesis"
+            "The critic's own cross-synthesis of this candidate with its "
+            "merge_with partners; required when merge_with is non-empty"
         ),
     )
 
