@@ -34,6 +34,8 @@ class FakeProviderFactory:
         messages,
         temperature,
         response_format,
+        tools=None,
+        tool_choice=None,
     ):
         response = self.responses[self.index]
         self.index += 1

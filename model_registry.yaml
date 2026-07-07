@@ -1,5 +1,21 @@
 # Model Registry — council role → ranked model preference lists
 #
+# NOTE: the model assignments in this file are NOT final. They are
+# temporary defaults so the pipeline runs end-to-end while the real
+# allocation is worked out. Do not read anything into the current
+# model choices. The final allocation must satisfy:
+#   - a critic never shares a provider with the identifiers/ideators
+#     it judges (LLMs favour their own provider's outputs)
+#   - gap council: cheaper models or models that excel at pragmatic
+#     reasoning; ideation council: frontier or frontier-adjacent models
+#     that score high on grounded creativity; critics: low-sycophancy
+#     models
+#
+# PROVISIONAL ALLOCATION — roles and structure are stable; the model
+# assignments below are placeholder wiring. The final council allocation
+# (provider-disjoint critics, tiered per the criteria above) lands in a
+# dedicated commit with full rationale.
+#
 # Each role maps to a ranked list of models. The router tries the first model;
 # on failure it falls back to the next. Per-model pricing enables the cost
 # tracker to estimate credit burn without relying on AWS budget alerts.
@@ -10,11 +26,7 @@
 # Pricing is in USD per 1M tokens as of June 2026. Update when pricing changes.
 # The router divides by 1_000_000 to get per-token cost at runtime.
 
-# ---------------------------------------------------------------------------
-# Gap Analysis Council — breadth over depth, cheaper models preferred
-# ---------------------------------------------------------------------------
-
-gap_ideator_1:
+gap_identifier_1:
   models:
     - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
       provider: anthropic
@@ -38,7 +50,7 @@ gap_ideator_1:
         input_per_1m: 0.50
         output_per_1m: 2.00
 
-gap_ideator_2:
+gap_identifier_2:
   models:
     - model_id: "zai.glm-5"
       provider: zhipu
@@ -62,7 +74,7 @@ gap_ideator_2:
         input_per_1m: 0.10
         output_per_1m: 0.10
 
-gap_ideator_3:
+gap_identifier_3:
   models:
     - model_id: "moonshot.kimi-k2-thinking"
       provider: moonshot
@@ -86,45 +98,56 @@ gap_ideator_3:
         input_per_1m: 0.50
         output_per_1m: 2.00
 
+# Models chosen as critic options for low scores on sycophancy
 gap_critic:
   models:
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+    - model_id: "anthropic.claude-opus-4-8"
       provider: anthropic
       timeout_seconds: 120
       retries: 2
       pricing:
-        input_per_1m: 15.00
-        output_per_1m: 75.00
-    - model_id: "gpt-5.4"
-      provider: openai
+        input_per_1m: 5.00
+        output_per_1m: 25.00
+    - model_id: "anthropic.claude-sonnet-4-6"
+      provider: anthropic
       timeout_seconds: 120
       retries: 2
       pricing:
-        input_per_1m: 2.50
-        output_per_1m: 10.00
+        input_per_1m: 3.00
+        output_per_1m: 15.00
+    - model_id: "mistral.mistral-large-3-675b-instruct"
+      provider: mistral
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.50
+        output_per_1m: 1.50
 
 gap_synthesiser:
   models:
-    - model_id: "gpt-5.4"
-      provider: openai
+    - model_id: "deepseek.deepseek-v3-2-v1:0"
+      provider: deepseek
       timeout_seconds: 120
       retries: 2
       pricing:
-        input_per_1m: 2.50
-        output_per_1m: 10.00
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
-      provider: anthropic
+        input_per_1m: 0.50
+        output_per_1m: 2.00
+    - model_id: "mistral.mistral-large-3-675b-instruct"
+      provider: mistral
       timeout_seconds: 120
       retries: 2
       pricing:
-        input_per_1m: 15.00
-        output_per_1m: 75.00
+        input_per_1m: 0.50
+        output_per_1m: 1.50
+    - model_id: "amazon.nova-pro-v1:0"
+      provider: amazon
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.80
+        output_per_1m: 3.20
 
-# ---------------------------------------------------------------------------
-# Ideation Council — depth and quality, frontier models preferred
-# ---------------------------------------------------------------------------
-
-idea_ideator_technical:
+idea_ideator_1:
   models:
     - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
       provider: anthropic
@@ -141,7 +164,7 @@ idea_ideator_technical:
         input_per_1m: 2.50
         output_per_1m: 10.00
 
-idea_ideator_commercial:
+idea_ideator_2:
   models:
     - model_id: "gpt-5.4"
       provider: openai
@@ -158,7 +181,7 @@ idea_ideator_commercial:
         input_per_1m: 15.00
         output_per_1m: 75.00
 
-idea_ideator_crossdomain:
+idea_ideator_3:
   models:
     - model_id: "moonshot.kimi-k2-thinking"
       provider: moonshot
@@ -182,39 +205,54 @@ idea_ideator_crossdomain:
         input_per_1m: 0.50
         output_per_1m: 2.00
 
+# Models chosen as critic options for low scores on sycophancy
 idea_critic:
   models:
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+    - model_id: "anthropic.claude-opus-4-8"
       provider: anthropic
       timeout_seconds: 120
       retries: 2
       pricing:
-        input_per_1m: 15.00
-        output_per_1m: 75.00
-    - model_id: "gpt-5.4"
-      provider: openai
+        input_per_1m: 5.00
+        output_per_1m: 25.00
+    - model_id: "anthropic.claude-sonnet-4-6"
+      provider: anthropic
       timeout_seconds: 120
       retries: 2
       pricing:
-        input_per_1m: 2.50
-        output_per_1m: 10.00
+        input_per_1m: 3.00
+        output_per_1m: 15.00
+    - model_id: "mistral.mistral-large-3-675b-instruct"
+      provider: mistral
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.50
+        output_per_1m: 1.50
 
 idea_synthesiser:
   models:
-    - model_id: "gpt-5.4"
-      provider: openai
+    - model_id: "deepseek.deepseek-v3-2-v1:0"
+      provider: deepseek
       timeout_seconds: 180
       retries: 2
       pricing:
-        input_per_1m: 2.50
-        output_per_1m: 10.00
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
-      provider: anthropic
+        input_per_1m: 0.50
+        output_per_1m: 2.00
+    - model_id: "mistral.mistral-large-3-675b-instruct"
+      provider: mistral
       timeout_seconds: 180
       retries: 2
       pricing:
-        input_per_1m: 15.00
-        output_per_1m: 75.00
+        input_per_1m: 0.50
+        output_per_1m: 1.50
+    - model_id: "amazon.nova-2-lite-v1:0"
+      provider: amazon
+      timeout_seconds: 180
+      retries: 2
+      pricing:
+        input_per_1m: 0.06
+        output_per_1m: 0.24
 
 prior_art_checker:
   models:

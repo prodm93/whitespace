@@ -1,13 +1,14 @@
-"""Fleshes out ranked candidate gaps into full UnmetNeed objects."""
+"""Fleshes out surviving candidate gaps into full UnmetNeed objects."""
 
 from __future__ import annotations
 
 import json
 import logging
 
-from whitespace.agents.council._helpers import format_profile
+from whitespace.agents.council._helpers import format_for_synthesis, format_profile
 from whitespace.config import Config
 from whitespace.models.router import ModelRouter
+from whitespace.schemas.critique import CriticReport
 from whitespace.schemas.gap import CandidateGap, UnmetNeed
 from whitespace.schemas.profile import ProfessionalProfile
 
@@ -16,15 +17,28 @@ logger = logging.getLogger(__name__)
 _SYSTEM_PROMPT = """\
 You are a patent-landscape strategist. You will receive:
 
-1. RANKED GAPS — candidate unmet needs already deduplicated and ranked \
-by a prior analysis step.
+1. SURVIVING CANDIDATES — candidate unmet needs that passed council \
+review, ranked best-first. Each carries its ID, its original text, and \
+the critic's guidance: scores, notes, sometimes a developed version, \
+and sometimes candidates to combine with.
 
 2. GRAPH CONTEXT — structured facts and excerpts from the knowledge graph \
 (patents, papers, web sources) that originally surfaced these gaps.
 
 3. USER PROFILE — the professional's skills and domain knowledge.
 
-For each gap, produce a fully fleshed-out unmet need:
+You are a write-up agent, not a judge. Selection, merging, and ranking \
+were all decided by the council critic. Rules:
+- Where an entry has a "Final version (critic-authored)", that IS the \
+gap — expand it faithfully into the template below. The original and \
+any "Merged from" texts are reference material for detail and \
+provenance, not competing versions.
+- Where there is no critic-authored version, expand the original text, \
+using the critic's notes for emphasis.
+- Preserve the input ranking order. Do not add, drop, merge, or reorder \
+anything.
+
+For each entry, produce a fully fleshed-out unmet need:
 
 - **title**: keep or lightly refine the existing title
 - **description**: expand to a thorough explanation (4-6 sentences)
@@ -39,9 +53,8 @@ to addressing this gap (use the exact skill names from the profile)
 - **provenance**: list the graph paths or source references that \
 support this gap's existence, formatted as \
 "[SOURCE → EDGE_TYPE → TARGET]" or "source: <document name>"
-
-Preserve the input ranking order. Do not add new gaps — only flesh out \
-the ones provided.\
+- **source_candidate_ids**: the IDs of every candidate this entry drew \
+from — the ranked anchor plus any combined candidates\
 """
 
 _RESPONSE_FORMAT = {
@@ -69,6 +82,10 @@ _RESPONSE_FORMAT = {
                                 "type": "array",
                                 "items": {"type": "string"},
                             },
+                            "source_candidate_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
                         },
                         "required": [
                             "title",
@@ -77,6 +94,7 @@ _RESPONSE_FORMAT = {
                             "why_unmet",
                             "matching_skills",
                             "provenance",
+                            "source_candidate_ids",
                         ],
                         "additionalProperties": False,
                     },
@@ -89,15 +107,8 @@ _RESPONSE_FORMAT = {
 }
 
 
-def _format_gaps(gaps: list[CandidateGap]) -> str:
-    lines: list[str] = []
-    for i, g in enumerate(gaps, 1):
-        lines.append(f"{i}. **{g.title}**: {g.description}")
-    return "\n".join(lines)
-
-
 class GapSynthesiser:
-    """Expands ranked candidate gaps into full UnmetNeed objects."""
+    """Expands surviving candidate gaps into full UnmetNeed objects."""
 
     def __init__(self, config: Config, router: ModelRouter) -> None:
         self._config = config
@@ -105,16 +116,17 @@ class GapSynthesiser:
 
     async def run(
         self,
-        ranked_gaps: list[CandidateGap],
+        pool: list[CandidateGap],
+        report: CriticReport,
         graph_context: str,
         profile: ProfessionalProfile,
     ) -> list[UnmetNeed]:
-        logger.info("GapSynthesiser: fleshing out %d gaps", len(ranked_gaps))
-        if not ranked_gaps:
+        logger.info("GapSynthesiser: synthesising %d survivors", len(report.ranking))
+        if not report.ranking:
             return []
 
         user_msg = (
-            f"## RANKED GAPS\n\n{_format_gaps(ranked_gaps)}\n\n"
+            f"## SURVIVING CANDIDATES\n\n{format_for_synthesis(pool, report)}\n\n"
             f"## GRAPH CONTEXT\n\n{graph_context}\n\n"
             f"## USER PROFILE\n\n{format_profile(profile)}"
         )
@@ -128,9 +140,23 @@ class GapSynthesiser:
             response_format=_RESPONSE_FORMAT,
         )
         parsed = json.loads(result["content"])
-        needs = [UnmetNeed.model_validate(n) for n in parsed.get("needs", [])]
-        logger.info(
-            "GapSynthesiser: produced %d fleshed-out unmet needs",
-            len(needs),
-        )
+        by_id = {c.candidate_id: c for c in pool}
+        needs: list[UnmetNeed] = []
+        for item in parsed.get("needs", []):
+            source_ids: list[str] = item.pop("source_candidate_ids", [])
+            assessment = report.assessment_for(source_ids[0]) if source_ids else None
+            models: list[str] = []
+            for cid in source_ids:
+                candidate = by_id.get(cid)
+                if candidate is not None and candidate.source_model not in models:
+                    models.append(candidate.source_model)
+            needs.append(
+                UnmetNeed(
+                    **item,
+                    scores=assessment.scores if assessment else {},
+                    contributing_models=models,
+                    critique_notes=assessment.objections if assessment else None,
+                )
+            )
+        logger.info("GapSynthesiser: produced %d fleshed-out unmet needs", len(needs))
         return needs

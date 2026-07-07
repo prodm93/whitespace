@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from whitespace.schemas.gap import CandidateGap, UnmetNeed
-from whitespace.schemas.idea import CandidateIdea
+from collections.abc import Sequence
+
+from whitespace.schemas.critique import CandidateLike, CriticReport
+from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.profile import ProfessionalProfile
 
 
@@ -24,18 +26,6 @@ def format_profile(profile: ProfessionalProfile) -> str:
     return "\n".join(sections) if sections else "(no profile available)"
 
 
-def format_candidates(all_gaps: list[list[CandidateGap]]) -> str:
-    """Render grouped candidate gaps for the critic's user message."""
-    sections: list[str] = []
-    for i, gaps in enumerate(all_gaps, 1):
-        model = gaps[0].source_model if gaps else "unknown"
-        lines = [f"### Analyst {i} (model: {model})"]
-        for g in gaps:
-            lines.append(f"- **{g.title}**: {g.description}")
-        sections.append("\n".join(lines))
-    return "\n\n".join(sections)
-
-
 def format_needs(needs: list[UnmetNeed]) -> str:
     """Render selected UnmetNeeds for ideator context."""
     lines: list[str] = []
@@ -48,14 +38,52 @@ def format_needs(needs: list[UnmetNeed]) -> str:
     return "\n\n".join(lines)
 
 
-def format_idea_candidates(all_ideas: list[list[CandidateIdea]]) -> str:
-    """Render grouped candidate ideas for the critic's user message."""
+def format_pool(candidates: Sequence[CandidateLike]) -> str:
+    """Render the candidate pool for the critic, with IDs and source models."""
     sections: list[str] = []
-    for i, ideas in enumerate(all_ideas, 1):
-        framing = ideas[0].framing if ideas else "unknown"
-        model = ideas[0].source_model if ideas else "unknown"
-        lines = [f"### Analyst {i} (model: {model}, framing: {framing})"]
-        for idea in ideas:
-            lines.append(f"- **{idea.title}**: {idea.description}")
+    for c in candidates:
+        sections.append(
+            f"- id: {c.candidate_id} | source model: {c.source_model}\n"
+            f"  **{c.title}**\n"
+            f"  {c.description}"
+        )
+    return "\n\n".join(sections)
+
+
+def format_for_synthesis(pool: Sequence[CandidateLike], report: CriticReport) -> str:
+    """Render ranked survivors with full original text plus critic guidance.
+
+    The critic's merged or developed text is the primary version; the
+    originals ride along underneath for provenance.
+    """
+    by_id = {c.candidate_id: c for c in pool}
+    sections: list[str] = []
+    for rank, cid in enumerate(report.ranking, 1):
+        candidate = by_id.get(cid)
+        if candidate is None:
+            continue
+        assessment = report.assessment_for(cid)
+        lines = [f"{rank}. [{cid}] **{candidate.title}** (source model: {candidate.source_model})"]
+        primary = None
+        if assessment:
+            primary = assessment.merged_description or assessment.developed_description
+        if primary:
+            lines.append(f"   Final version (critic-authored): {primary}")
+            lines.append(f"   Original for provenance: {candidate.description}")
+        else:
+            lines.append(f"   {candidate.description}")
+        if assessment:
+            if assessment.scores:
+                scored = ", ".join(f"{k}: {v}" for k, v in assessment.scores.items())
+                lines.append(f"   Critic scores: {scored}")
+            if assessment.objections:
+                lines.append(f"   Critic notes: {assessment.objections}")
+            for merge_id in assessment.merge_with:
+                merged = by_id.get(merge_id)
+                if merged is not None:
+                    lines.append(
+                        f"   Merged from [{merge_id}] **{merged.title}** "
+                        f"(source model: {merged.source_model}): {merged.description}"
+                    )
         sections.append("\n".join(lines))
     return "\n\n".join(sections)
