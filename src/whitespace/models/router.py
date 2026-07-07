@@ -26,20 +26,32 @@ class ModelRouter:
         self,
         *,
         role: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         temperature: float = 0.0,
         response_format: dict[str, Any] | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | None = None,
     ) -> dict[str, Any]:
         """Call the preferred model for *role*, falling back on failure.
 
+        ``tools`` takes normalised definitions (``name``, ``description``,
+        ``parameters`` JSON schema); ``tool_choice`` is ``"auto"``,
+        ``"required"``, or a tool name. Translation to the provider's
+        format (Bedrock Converse or OpenAI-style) happens in the provider
+        modules.
+
         Returns a dict with keys: ``content``, ``model_id``,
-        ``input_tokens``, ``output_tokens``.
+        ``input_tokens``, ``output_tokens``, ``tool_calls`` (normalised:
+        ``id``, ``name``, ``arguments`` dict), and ``stop_reason``
+        (``"tool_use"`` or ``"end"``).
         """
         chain = self._registry.get_chain(role)
         last_error: Exception | None = None
         for entry in chain:
             try:
-                result = await self._try_model(entry, messages, temperature, response_format)
+                result = await self._try_model(
+                    entry, messages, temperature, response_format, tools, tool_choice
+                )
                 await self._cost_tracker.record(entry, result)
                 return result
             except Exception as exc:
@@ -55,9 +67,11 @@ class ModelRouter:
     async def _try_model(
         self,
         entry: ModelEntry,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         temperature: float,
         response_format: dict[str, Any] | None,
+        tools: list[dict[str, Any]] | None,
+        tool_choice: str | None,
     ) -> dict[str, Any]:
         return await retry_async(
             self._provider_factory.call,
@@ -65,6 +79,8 @@ class ModelRouter:
             messages,
             temperature,
             response_format,
+            tools,
+            tool_choice,
             retries=entry.retries,
             transient_exceptions=TRANSIENT_EXCEPTIONS,
         )
