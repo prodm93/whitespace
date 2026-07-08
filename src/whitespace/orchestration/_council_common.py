@@ -16,16 +16,17 @@ MAX_REVISION_ROUNDS = 2
 SCORE_BAR = 5
 
 C = TypeVar("C", bound=CandidateLike)
+T = TypeVar("T")
 
 
 async def collect_batches(
     roles: list[str],
-    tasks: Sequence[Awaitable[list[C]]],
+    tasks: Sequence[Awaitable[T]],
     label: str,
-) -> list[tuple[str, list[C]]]:
+) -> list[tuple[str, T]]:
     """Gather per-role tasks, dropping failures with a warning."""
     raw = await asyncio.gather(*tasks, return_exceptions=True)
-    batches: list[tuple[str, list[C]]] = []
+    batches: list[tuple[str, T]] = []
     for role, outcome in zip(roles, raw, strict=True):
         if isinstance(outcome, BaseException):
             logger.warning("%s: %s failed: %s", label, role, outcome)
@@ -51,14 +52,19 @@ async def run_targeted_revision(
     revisers: Mapping[str, Reviser[C]],
     report: CriticReport,
     pool: list[C],
-    graph_context: str,
+    contexts: Mapping[str, str],
     profile: ProfessionalProfile,
     label: str,
 ) -> list[C]:
-    """Re-invoke only the flagged originators, then swap revisions into the pool."""
+    """Re-invoke only the flagged originators, then swap revisions into the pool.
+
+    ``contexts`` maps each role to the evidence it revises against — its
+    own exploration findings for gap identifiers, the shared ideation
+    context for ideators.
+    """
     grouped = group_delegations(report, pool)
     roles = [role for role in grouped if role in revisers]
-    tasks = [revisers[role](grouped[role], graph_context, profile) for role in roles]
+    tasks = [revisers[role](grouped[role], contexts.get(role, ""), profile) for role in roles]
     batches = await collect_batches(roles, tasks, label)
     revised = [candidate for _, batch in batches for candidate in batch]
     return replace_candidates(pool, revised)

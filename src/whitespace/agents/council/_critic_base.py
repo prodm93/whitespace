@@ -90,7 +90,10 @@ class CouncilCritic:
         self,
         candidates: Sequence[CandidateLike],
         profile: ProfessionalProfile,
+        evidence: str = "",
     ) -> CriticReport:
+        """Assess the pool; ``evidence`` carries dated findings and graph
+        context so the critic can weigh how the landscape evolved."""
         logger.info("%s: assessing %d candidates", type(self).__name__, len(candidates))
         if not candidates:
             return CriticReport(assessments=[], ranking=[])
@@ -99,6 +102,8 @@ class CouncilCritic:
             f"## CANDIDATES\n\n{format_pool(candidates)}\n\n"
             f"## USER PROFILE\n\n{format_profile(profile)}"
         )
+        if evidence:
+            user_msg += f"\n\n## EVIDENCE (dated)\n\n{evidence}"
         result = await self._router.call(
             role=self.role,
             messages=[

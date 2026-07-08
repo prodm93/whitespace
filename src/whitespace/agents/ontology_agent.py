@@ -80,12 +80,27 @@ class OntologyAgent:
         self._json_reader = JsonReader()
         self._text_reader = TextReader()
 
-    async def run(self, doc_paths: list[str]) -> OntologyDefinition:
-        logger.info("OntologyAgent: analysing %d documents", len(doc_paths))
-        if not doc_paths:
+    async def run(
+        self,
+        doc_paths: list[str],
+        extra_samples: list[tuple[str, str]] | None = None,
+    ) -> OntologyDefinition:
+        """Infer the ontology from file samples plus optional (name, text) pairs.
+
+        ``extra_samples`` lets research findings shape the ontology alongside
+        uploaded files, so the inferred types reflect the whole corpus.
+        """
+        extra_samples = extra_samples or []
+        logger.info(
+            "OntologyAgent: analysing %d documents, %d extra samples",
+            len(doc_paths),
+            len(extra_samples),
+        )
+        if not doc_paths and not extra_samples:
             return self._empty_fallback(reason="no documents supplied")
 
         samples = await self._collect_samples(doc_paths[:_MAX_DOCS_SAMPLED])
+        samples.extend(extra_samples[: max(0, _MAX_DOCS_SAMPLED - len(samples))])
         if not samples:
             return self._empty_fallback(
                 reason=f"no readable samples in {len(doc_paths)} document(s)"

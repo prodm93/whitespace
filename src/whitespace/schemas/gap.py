@@ -15,6 +15,18 @@ class CandidateGap(BaseModel):
     )
 
 
+class GapExploration(BaseModel):
+    """One identifier's structured output: its candidates plus the
+    evidence trail that produced them. Nothing is discarded — findings
+    feed revision and the final write-up."""
+
+    gaps: list[CandidateGap] = Field(default_factory=list)
+    findings: str = Field(
+        default="",
+        description="Transcript of graph and prior-art searches behind the gaps",
+    )
+
+
 class UnmetNeed(BaseModel):
     title: str = Field(..., description="Concise name for the unmet need")
     description: str = Field(..., description="Detailed explanation of the gap")

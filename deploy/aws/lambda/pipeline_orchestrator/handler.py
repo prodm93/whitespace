@@ -1,106 +1,139 @@
-"""Lambda handler — runs LangGraph pipelines (ingest, gap council, ideation council).
+"""SaaS analysis pipeline as a Lambda durable function.
 
-Triggered by SQS. Checkpoints state to DynamoDB via langgraph-checkpoint-aws
-for human-in-the-loop interrupt/resume.
+One durable execution covers the whole flow: profile extraction, the
+research-first gap analysis, a zero-compute-cost callback wait while
+the human selects gaps, then ideation. Every stage is a checkpointed
+step — a crash, timeout or redeploy replays past completed steps
+instead of redoing them.
+
+Invocation: SQS → dispatcher (async invoke) → this function. Direct
+SQS event-source mapping is deliberately avoided: it invokes
+synchronously, which caps the execution at one 15-minute slice.
+
+Follow-up (tracked): chunk the graph build per document so the
+gap_analysis step stays well inside a single invocation slice on
+large corpora.
 """
 
+import asyncio
 import json
 import logging
 import os
+
+from aws_durable_execution_sdk import DurableContext, durable_execution
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
-CHECKPOINTS_TABLE = os.environ.get("CHECKPOINTS_TABLE", "")
-CHECKPOINTS_BUCKET = os.environ.get("CHECKPOINTS_BUCKET", "")
 JOBS_TABLE = os.environ.get("JOBS_TABLE", "")
 RESULTS_BUCKET = os.environ.get("RESULTS_BUCKET", "")
 
-_checkpointer = None
+_pipeline = None
 
 
-def _get_checkpointer():
-    global _checkpointer
-    if _checkpointer is None:
-        from langgraph_checkpoint_aws import DynamoDBSaver
+def _get_pipeline():
+    """Cold-start singleton; reused across invocation slices."""
+    global _pipeline
+    if _pipeline is None:
+        from whitespace.config import Config
+        from whitespace.orchestration.pipeline import Pipeline
 
-        kwargs = {
-            "table_name": CHECKPOINTS_TABLE,
-            "region_name": AWS_REGION,
-            "ttl_seconds": 86400 * 7,
-            "enable_checkpoint_compression": True,
-        }
-        if CHECKPOINTS_BUCKET:
-            kwargs["s3_offload_config"] = {"bucket_name": CHECKPOINTS_BUCKET}
-        _checkpointer = DynamoDBSaver(**kwargs)
-    return _checkpointer
+        _pipeline = Pipeline.from_config(Config())
+        asyncio.run(_pipeline.initialise())
+    return _pipeline
 
 
-def handler(event: dict, context: object) -> dict:
-    """SQS-triggered handler. Each record contains a job to execute."""
-    for record in event.get("Records", []):
-        body = json.loads(record["body"])
-        job_id = body["job_id"]
-        job_type = body["job_type"]
-        payload = body.get("payload", {})
+@durable_execution
+def handler(event: dict, context: DurableContext) -> dict:
+    job_id = event["job_id"]
+    payload = event.get("payload", {})
 
-        logger.info("Processing job_id=%s type=%s", job_id, job_type)
-        _update_job_status(job_id, "running")
+    context.step(lambda: _set_status(job_id, "running"), name="status_running")
+    profile = context.step(lambda: _extract_profile(payload), name="extract_profile")
+    needs = context.step(lambda: _gap_analysis(job_id, payload, profile), name="gap_analysis")
+    context.step(
+        lambda: _publish(job_id, "awaiting_selection", {"needs": needs}),
+        name="publish_gaps",
+    )
 
-        try:
-            result = _run_pipeline(job_type, job_id, payload)
-            _update_job_status(job_id, "completed", result=result)
-        except Exception as exc:
-            logger.error("Job %s failed: %s", job_id, exc, exc_info=True)
-            _update_job_status(job_id, "failed", error=str(exc))
+    # Zero-cost suspension: the execution sleeps until POST /api/ideate
+    # sends the callback with the user's selections.
+    selection_raw = context.wait_for_callback(
+        lambda token: _store_callback_token(job_id, token),
+        name="await_gap_selection",
+    )
+    selected_titles = json.loads(selection_raw or "{}").get("selected_titles", [])
 
-    return {"statusCode": 200}
+    proposals = context.step(lambda: _ideation(profile, needs, selected_titles), name="ideation")
+    context.step(
+        lambda: _publish(job_id, "completed", {"needs": needs, "proposals": proposals}),
+        name="publish_results",
+    )
+    return {"job_id": job_id, "status": "completed"}
 
 
-def _run_pipeline(job_type: str, job_id: str, payload: dict) -> dict:
-    """Dispatch to the appropriate LangGraph pipeline."""
-    checkpointer = _get_checkpointer()
-    config = {"configurable": {"thread_id": job_id}}
+def _extract_profile(payload: dict) -> dict:
+    pipeline = _get_pipeline()
+    paths = payload.get("profile_paths", [])
+    if not paths:
+        raise RuntimeError("No profile documents supplied")
+    profile = asyncio.run(pipeline.extract_profile(paths))
+    return profile.model_dump()
 
-    if job_type == "ingest":
-        from whitespace.orchestration.ingest_graph import build_ingest_graph
 
-        graph = build_ingest_graph(checkpointer=checkpointer)
-        result = graph.invoke(payload, config)
-    elif job_type == "gap_council":
-        from whitespace.orchestration.gap_council_graph import build_gap_council_graph
+def _gap_analysis(job_id: str, payload: dict, profile: dict) -> list[dict]:
+    from whitespace.schemas.profile import ProfessionalProfile
 
-        graph = build_gap_council_graph(checkpointer=checkpointer)
-        result = graph.invoke(payload, config)
-    elif job_type in ("ideation_council", "ideation_resume"):
-        from whitespace.orchestration.ideation_council_graph import (
-            build_ideation_council_graph,
+    pipeline = _get_pipeline()
+    needs = asyncio.run(
+        pipeline.analyse_gaps(
+            ProfessionalProfile.model_validate(profile),
+            ", ".join(payload.get("domain_keywords", [])),
+            payload.get("profile_paths", []) + payload.get("domain_paths", []),
+            keep_findings=bool(payload.get("keep_findings", False)),
+            run_id=job_id,
         )
-
-        graph = build_ideation_council_graph(checkpointer=checkpointer)
-        result = graph.invoke(payload, config)
-    else:
-        raise ValueError(f"Unknown job_type: {job_type}")
-
-    return result
+    )
+    return [n.model_dump() for n in needs]
 
 
-def _update_job_status(
-    job_id: str,
-    status: str,
-    result: dict | None = None,
-    error: str | None = None,
-) -> None:
+def _ideation(profile: dict, needs: list[dict], selected_titles: list[str]) -> list[dict]:
+    from whitespace.schemas.gap import UnmetNeed
+    from whitespace.schemas.profile import ProfessionalProfile
+
+    pipeline = _get_pipeline()
+    chosen = [UnmetNeed.model_validate(n) for n in needs if n.get("title") in selected_titles]
+    proposals = asyncio.run(pipeline.ideate(chosen, ProfessionalProfile.model_validate(profile)))
+    return [p.model_dump() for p in proposals]
+
+
+def _store_callback_token(job_id: str, token: str) -> None:
+    """Persist the callback token so the ideate route can resume us."""
     import boto3
 
     dynamo = boto3.resource("dynamodb", region_name=AWS_REGION)
-    table = dynamo.Table(JOBS_TABLE)
+    dynamo.Table(JOBS_TABLE).update_item(
+        Key={"job_id": job_id},
+        UpdateExpression="SET callback_token = :t",
+        ExpressionAttributeValues={":t": token},
+    )
 
+
+def _publish(job_id: str, status: str, result: dict) -> None:
+    import boto3
+
+    s3 = boto3.client("s3", region_name=AWS_REGION)
+    key = f"results/{job_id}.json"
+    s3.put_object(Bucket=RESULTS_BUCKET, Key=key, Body=json.dumps(result))
+    _set_status(job_id, status, result_key=key)
+
+
+def _set_status(job_id: str, status: str, result_key: str | None = None) -> None:
+    import boto3
+
+    dynamo = boto3.resource("dynamodb", region_name=AWS_REGION)
     item: dict = {"job_id": job_id, "status": status}
-    if result is not None:
-        item["result"] = json.dumps(result)
-    if error is not None:
-        item["error"] = error
-
-    table.put_item(Item=item)
+    if result_key:
+        item["result_key"] = result_key
+    dynamo.Table(JOBS_TABLE).put_item(Item=item)

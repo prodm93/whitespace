@@ -99,6 +99,7 @@ class UsptpClient:
                     "patent_number": pat.get("patent_number", ""),
                     "title": pat.get("patent_title", ""),
                     "abstract": pat.get("patent_abstract", ""),
+                    "patent_date": pat.get("patent_date", ""),
                     "claims": "",
                     "description": "",
                     "inventors": inventors,

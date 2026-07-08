@@ -1,4 +1,4 @@
-"""LangGraph for ideation: fan-out → critic-routed revision loop → synthesis → prior art."""
+"""LangGraph for ideation: fan-out → novelty filter → critic loop → synthesis."""
 
 from __future__ import annotations
 
@@ -25,38 +25,25 @@ from whitespace.schemas.profile import ProfessionalProfile
 
 logger = logging.getLogger(__name__)
 
-_MAX_PRIOR_ART_RETRIES = 3
 
-
-def _context_with_prior_art(state: IdeationCouncilState) -> str:
-    ctx = state["graph_context"]
-    prior_art_ctx = state.get("prior_art_context", "")
-    if not prior_art_ctx:
-        return ctx
-    return (
-        f"{ctx}\n\n## PRIOR ART TO AVOID\n\n"
-        f"The following ideas were flagged as too similar to existing prior "
-        f"art. Generate DIFFERENT ideas that avoid these overlaps:\n\n{prior_art_ctx}"
-    )
-
-
-class IdeationCouncilState(TypedDict):
+class IdeationCouncilState(TypedDict, total=False):
     selected_needs: list[UnmetNeed]
     profile: ProfessionalProfile
     graph_context: str
-    prior_art_context: str
     candidates: list[CandidateIdea]
     report: CriticReport | None
     revision_round: int
-    synthesised_ideas: list[IdeationProposal]
-    prior_art_results: list[IdeationProposal]
-    prior_art_found: bool
-    prior_art_retry_count: int
     final_proposals: list[IdeationProposal]
+    discards: list[dict[str, str]]
 
 
 class IdeationCouncilGraph:
-    """Fan-out ideators → critic-routed revision → synthesis → prior-art loop."""
+    """Fan-out ideators → ideator-driven novelty filter → critic → synthesis.
+
+    Novelty is checked by the ideators themselves: each hunts duplicates
+    of its own ideas via the prior-art agent and decides modify or drop,
+    with automatic discard of remaining (semi-)duplicates after the cap.
+    """
 
     def __init__(
         self,
@@ -68,32 +55,26 @@ class IdeationCouncilGraph:
         self._ideators = {i.role_name: i for i in ideators}
         self._critic = critic
         self._synthesiser = synthesiser
-        self._prior_art_agent = prior_art_agent
+        self._prior_art = prior_art_agent
         self._compiled = self._build()
 
     def _build(self) -> Any:
         builder = StateGraph(IdeationCouncilState)
         builder.add_node("fan_out_ideators", self._run_ideators)
-        builder.add_node("critic", self._run_critic)
+        builder.add_node("novelty", self._run_novelty)
         builder.add_node("revise", self._run_revision)
+        builder.add_node("critic", self._run_critic)
         builder.add_node("synthesiser", self._run_synthesiser)
-        builder.add_node("prior_art_check", self._run_prior_art_check)
-        builder.add_node("finalise", self._run_finalise)
         builder.set_entry_point("fan_out_ideators")
-        builder.add_edge("fan_out_ideators", "critic")
+        builder.add_edge("fan_out_ideators", "novelty")
+        builder.add_edge("novelty", "critic")
         builder.add_conditional_edges(
             "critic",
             self._route_after_critic,
             {"revise": "revise", "synthesiser": "synthesiser"},
         )
         builder.add_edge("revise", "critic")
-        builder.add_edge("synthesiser", "prior_art_check")
-        builder.add_conditional_edges(
-            "prior_art_check",
-            self._should_retry,
-            {"fan_out_ideators": "fan_out_ideators", "finalise": "finalise"},
-        )
-        builder.add_edge("finalise", END)
+        builder.add_edge("synthesiser", END)
         return builder.compile()
 
     async def run(
@@ -101,8 +82,8 @@ class IdeationCouncilGraph:
         selected_needs: list[UnmetNeed],
         graph_context: str,
         profile: ProfessionalProfile,
-    ) -> list[IdeationProposal]:
-        """Execute the ideation council and return final proposals."""
+    ) -> tuple[list[IdeationProposal], list[dict[str, str]]]:
+        """Execute the council; returns (proposals, discarded candidates)."""
         logger.info(
             "IdeationCouncilGraph: starting with %d needs, %d ideators",
             len(selected_needs),
@@ -112,28 +93,17 @@ class IdeationCouncilGraph:
             "selected_needs": selected_needs,
             "profile": profile,
             "graph_context": graph_context,
-            "prior_art_context": "",
-            "candidates": [],
-            "report": None,
-            "revision_round": 0,
-            "synthesised_ideas": [],
-            "prior_art_results": [],
-            "prior_art_found": False,
-            "prior_art_retry_count": 0,
-            "final_proposals": [],
         }
         final_state = await self._compiled.ainvoke(initial_state)
-        proposals: list[IdeationProposal] = final_state["final_proposals"]
-        return proposals
-
-    async def _run_critic(self, state: IdeationCouncilState) -> dict[str, Any]:
-        return {"report": await self._critic.run(state["candidates"], state["profile"])}
+        proposals: list[IdeationProposal] = final_state.get("final_proposals", [])
+        return proposals, final_state.get("discards", [])
 
     async def _run_ideators(self, state: IdeationCouncilState) -> dict[str, Any]:
-        ctx = _context_with_prior_art(state)
         roles = list(self._ideators)
         tasks = [
-            self._ideators[role].run(state["selected_needs"], ctx, state["profile"])
+            self._ideators[role].run(
+                state["selected_needs"], state["graph_context"], state["profile"]
+            )
             for role in roles
         ]
         batches = await collect_batches(roles, tasks, "IdeationCouncilGraph")
@@ -146,20 +116,54 @@ class IdeationCouncilGraph:
         )
         return {"candidates": pool, "report": None, "revision_round": 0}
 
+    async def _run_novelty(self, state: IdeationCouncilState) -> dict[str, Any]:
+        """Each ideator novelty-checks its own ideas and prunes duplicates."""
+        by_role: dict[str, list[CandidateIdea]] = {}
+        for candidate in state["candidates"]:
+            by_role.setdefault(candidate.source_role, []).append(candidate)
+        roles = [role for role in by_role if role in self._ideators]
+        tasks = [
+            self._ideators[role].novelty_filter(by_role[role], self._prior_art) for role in roles
+        ]
+        batches = await collect_batches(roles, tasks, "IdeationCouncilGraph.novelty")
+        survivors = [c for _, (kept, _) in batches for c in kept]
+        discards = [
+            {
+                "title": c.title,
+                "description": c.description,
+                "reason": "identified (semi-)duplicate during novelty check",
+            }
+            for _, (_, dropped) in batches
+            for c in dropped
+        ]
+        logger.info(
+            "IdeationCouncilGraph: novelty filter kept %d/%d candidates",
+            len(survivors),
+            len(state["candidates"]),
+        )
+        return {"candidates": survivors, "discards": discards}
+
     def _route_after_critic(self, state: IdeationCouncilState) -> str:
         """Conditional edge driven by the critic's own verdicts."""
         if should_revise(state["report"], state["revision_round"]):
             return "revise"
         return "synthesiser"
 
+    async def _run_critic(self, state: IdeationCouncilState) -> dict[str, Any]:
+        report = await self._critic.run(
+            state["candidates"], state["profile"], evidence=state["graph_context"]
+        )
+        return {"report": report}
+
     async def _run_revision(self, state: IdeationCouncilState) -> dict[str, Any]:
         report = state["report"]
         assert report is not None  # only reachable via _route_after_critic
+        contexts = {role: state["graph_context"] for role in self._ideators}
         pool = await run_targeted_revision(
             {role: agent.revise for role, agent in self._ideators.items()},
             report,
             state["candidates"],
-            _context_with_prior_art(state),
+            contexts,
             state["profile"],
             "IdeationCouncilGraph",
         )
@@ -168,48 +172,21 @@ class IdeationCouncilGraph:
     async def _run_synthesiser(self, state: IdeationCouncilState) -> dict[str, Any]:
         report = state["report"]
         assert report is not None  # critic always precedes synthesis
+        resolved = resolve_final(report)
+        by_id = {c.candidate_id: c for c in state["candidates"]}
+        kills = [
+            {
+                "title": by_id[a.candidate_id].title,
+                "description": by_id[a.candidate_id].description,
+                "reason": a.objections or "killed by council critic",
+            }
+            for a in resolved.assessments
+            if a.verdict == "kill" and a.candidate_id in by_id
+        ]
         proposals = await self._synthesiser.run(
-            state["candidates"],
-            resolve_final(report),
-            state["graph_context"],
-            state["profile"],
+            state["candidates"], resolved, state["graph_context"], state["profile"]
         )
-        return {"synthesised_ideas": proposals}
-
-    async def _run_prior_art_check(self, state: IdeationCouncilState) -> dict[str, Any]:
-        result = await self._prior_art_agent.run(state["synthesised_ideas"])
-        prior_art_ctx = state.get("prior_art_context", "")
-        if result.prior_art_found:
-            new_notes = [
-                f"- **{p.title}**: {p.prior_art_notes}"
-                for p in result.proposals
-                if p.prior_art_notes
-            ]
-            if new_notes:
-                prior_art_ctx += "\n".join(new_notes) + "\n"
         return {
-            "prior_art_results": result.proposals,
-            "prior_art_found": result.prior_art_found,
-            "prior_art_retry_count": state["prior_art_retry_count"] + 1,
-            "prior_art_context": prior_art_ctx,
+            "final_proposals": proposals,
+            "discards": state.get("discards", []) + kills,
         }
-
-    def _should_retry(self, state: IdeationCouncilState) -> str:
-        """Conditional edge: loop back if prior art found and retries remain."""
-        if state.get("prior_art_found") and state["prior_art_retry_count"] < _MAX_PRIOR_ART_RETRIES:
-            logger.info(
-                "IdeationCouncilGraph: prior art found, retrying (%d/%d)",
-                state["prior_art_retry_count"],
-                _MAX_PRIOR_ART_RETRIES,
-            )
-            return "fan_out_ideators"
-        return "finalise"
-
-    async def _run_finalise(self, state: IdeationCouncilState) -> dict[str, Any]:
-        proposals = state.get("prior_art_results") or state.get("synthesised_ideas", [])
-        logger.info(
-            "IdeationCouncilGraph: finalised %d proposals after %d prior-art passes",
-            len(proposals),
-            state["prior_art_retry_count"],
-        )
-        return {"final_proposals": proposals}

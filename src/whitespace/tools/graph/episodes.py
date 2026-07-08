@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 _FETCH_EPISODE_CHUNKS_CYPHER = """
 MATCH (e:Episodic)
 WHERE e.uuid IN $uuids AND e.group_id = $group_id
-RETURN e.uuid AS uuid, e.name AS name, e.content AS content
+RETURN e.uuid AS uuid, e.name AS name, e.content AS content,
+       toString(e.created_at) AS created_at,
+       e.source_description AS source_description
 """
 
 
@@ -58,5 +60,7 @@ class GraphEpisodeTools:
             out[uuid] = {
                 "name": row.get("name") or "",
                 "content": row.get("content") or "",
+                "created_at": row.get("created_at") or "",
+                "source_description": row.get("source_description") or "",
             }
         return out

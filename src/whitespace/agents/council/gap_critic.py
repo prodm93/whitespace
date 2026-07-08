@@ -40,6 +40,12 @@ every partner. Mark the partners keep so their originals survive for \
 provenance; the combination appears once in the ranking, via the \
 anchor candidate.
 
+The EVIDENCE section carries dates: when episodes entered the graph, \
+when findings were retrieved, publication dates. Use them. A gap is \
+stronger if the landscape shows repeated failed attempts over time, and \
+weaker if recent work is visibly closing it. Weigh how the field has \
+evolved, not just its current snapshot.
+
 Score every candidate 1-10 on: novelty, specificity, evidence_strength, \
 profile_relevance.
 

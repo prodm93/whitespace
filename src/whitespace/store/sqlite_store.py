@@ -2,33 +2,17 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 
 import aiosqlite
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
+from whitespace.schemas.research import RawFinding
+from whitespace.store._sqlite_rows import _SCHEMA, row_to_gap_run, row_to_idea_run
 from whitespace.store.base import GapRun, IdeaRun, SessionStore
 
 logger = logging.getLogger(__name__)
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS gap_runs (
-    run_id TEXT PRIMARY KEY,
-    timestamp TEXT NOT NULL,
-    needs_json TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS idea_runs (
-    run_id TEXT PRIMARY KEY,
-    gap_run_id TEXT NOT NULL,
-    selected_need_titles_json TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
-    proposals_json TEXT NOT NULL,
-    FOREIGN KEY (gap_run_id) REFERENCES gap_runs(run_id)
-);
-"""
 
 
 class SqliteSessionStore(SessionStore):
@@ -84,7 +68,7 @@ class SqliteSessionStore(SessionStore):
                 "SELECT run_id, timestamp, needs_json FROM gap_runs ORDER BY timestamp DESC"
             )
             rows = await cursor.fetchall()
-        return [_row_to_gap_run(row) for row in rows]
+        return [row_to_gap_run(row) for row in rows]
 
     async def list_idea_runs(
         self,
@@ -101,7 +85,7 @@ class SqliteSessionStore(SessionStore):
             else:
                 cursor = await db.execute("SELECT * FROM idea_runs ORDER BY timestamp DESC")
             rows = await cursor.fetchall()
-        return [_row_to_idea_run(row) for row in rows]
+        return [row_to_idea_run(row) for row in rows]
 
     async def get_gap_run(self, run_id: str) -> GapRun | None:
         await self._ensure_schema()
@@ -114,7 +98,7 @@ class SqliteSessionStore(SessionStore):
             row = await cursor.fetchone()
         if row is None:
             return None
-        return _row_to_gap_run(row)
+        return row_to_gap_run(row)
 
     async def get_idea_run(self, run_id: str) -> IdeaRun | None:
         await self._ensure_schema()
@@ -127,7 +111,7 @@ class SqliteSessionStore(SessionStore):
             row = await cursor.fetchone()
         if row is None:
             return None
-        return _row_to_idea_run(row)
+        return row_to_idea_run(row)
 
     async def get_all_previous_needs(self) -> list[UnmetNeed]:
         await self._ensure_schema()
@@ -151,23 +135,56 @@ class SqliteSessionStore(SessionStore):
             all_proposals.extend(IdeationProposal.model_validate(p) for p in raw)
         return all_proposals
 
+    async def save_raw_findings(self, run_id: str, findings: list[RawFinding]) -> None:
+        if not findings:
+            return
+        await self._ensure_schema()
+        rows = [(run_id, f.found_at.isoformat(), f.model_dump_json()) for f in findings]
+        async with aiosqlite.connect(self._db_path) as db:
+            await db.executemany(
+                "INSERT INTO raw_findings (run_id, found_at, finding_json) VALUES (?, ?, ?)",
+                rows,
+            )
+            await db.commit()
+        logger.info("SqliteSessionStore: saved %d raw findings for run %s", len(rows), run_id)
 
-def _row_to_gap_run(row: aiosqlite.Row) -> GapRun:
-    needs = [UnmetNeed.model_validate(n) for n in json.loads(row["needs_json"])]
-    return GapRun(
-        run_id=row["run_id"],
-        timestamp=datetime.fromisoformat(row["timestamp"]).replace(tzinfo=UTC),
-        needs=needs,
-    )
+    async def list_raw_findings(self, run_id: str | None = None) -> list[RawFinding]:
+        await self._ensure_schema()
+        where = " WHERE run_id = ?" if run_id is not None else ""
+        params = (run_id,) if run_id is not None else ()
+        async with aiosqlite.connect(self._db_path) as db:
+            cursor = await db.execute(
+                f"SELECT finding_json FROM raw_findings{where} ORDER BY found_at DESC", params
+            )
+            rows = await cursor.fetchall()
+        return [RawFinding.model_validate_json(row[0]) for row in rows]
 
+    async def save_discards(self, run_id: str, kind: str, items: list[dict[str, str]]) -> None:
+        if not items:
+            return
+        await self._ensure_schema()
+        rows = [
+            (run_id, kind, i.get("title", ""), i.get("description", ""), i.get("reason", ""))
+            for i in items
+        ]
+        async with aiosqlite.connect(self._db_path) as db:
+            await db.executemany(
+                "INSERT INTO discards (run_id, kind, title, description, reason)"
+                " VALUES (?, ?, ?, ?, ?)",
+                rows,
+            )
+            await db.commit()
+        logger.info("SqliteSessionStore: saved %d %s discards", len(rows), kind)
 
-def _row_to_idea_run(row: aiosqlite.Row) -> IdeaRun:
-    proposals = [IdeationProposal.model_validate(p) for p in json.loads(row["proposals_json"])]
-    titles = json.loads(row["selected_need_titles_json"])
-    return IdeaRun(
-        run_id=row["run_id"],
-        gap_run_id=row["gap_run_id"],
-        selected_need_titles=titles,
-        timestamp=datetime.fromisoformat(row["timestamp"]).replace(tzinfo=UTC),
-        proposals=proposals,
-    )
+    async def list_discards(self, kind: str | None = None) -> list[dict[str, str]]:
+        await self._ensure_schema()
+        where = " WHERE kind = ?" if kind is not None else ""
+        params = (kind,) if kind is not None else ()
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                f"SELECT kind, title, description, reason FROM discards{where} ORDER BY id DESC",
+                params,
+            )
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]

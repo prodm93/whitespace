@@ -22,13 +22,24 @@ class ProfileUploadRequest(BaseModel):
 
 
 class GapRequest(BaseModel):
-    pass
+    fresh_start: bool = Field(
+        default=False,
+        description="Ignore cross-run memory: rerun everything from scratch",
+    )
 
 
 class IdeateRequest(BaseModel):
     selected_needs: list[str] = Field(
         ..., description="Titles of UnmetNeed items the user selected for ideation"
     )
+    fresh_start: bool = Field(
+        default=False,
+        description="Ignore cross-run memory: no negative examples from prior runs",
+    )
+
+
+class OrchestrateRequest(BaseModel):
+    intent: str = Field(..., description="Natural-language statement of what the user wants")
 
 
 class QueryRequest(BaseModel):

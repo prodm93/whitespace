@@ -6,7 +6,14 @@ import json
 import logging
 
 from whitespace.agents.council._helpers import format_needs, format_profile
+from whitespace.agents.council._idea_prompts import (
+    IDEAS_FORMAT,
+    REVISION_PROMPT,
+    SYSTEM_PROMPT,
+)
+from whitespace.agents.council._novelty import run_novelty_filter
 from whitespace.agents.council._revision import request_revisions
+from whitespace.agents.council.prior_art_agent import PriorArtAgent
 from whitespace.config import Config
 from whitespace.models.router import ModelRouter
 from whitespace.schemas.gap import UnmetNeed
@@ -14,85 +21,6 @@ from whitespace.schemas.idea import CandidateIdea
 from whitespace.schemas.profile import ProfessionalProfile
 
 logger = logging.getLogger(__name__)
-
-_SYSTEM_PROMPT = """\
-You are a patent ideation specialist. You will receive:
-
-1. SELECTED NEEDS — unmet needs in the patent landscape that the user \
-wants to develop into patentable ideas.
-
-2. GRAPH CONTEXT — structured facts and excerpts from the knowledge graph \
-that surfaced these needs.
-
-3. USER PROFILE — the professional's skills and domain knowledge.
-
-You are the council's evangelist. Run wild: propose the boldest, most \
-inventive and innovative ideas the unmet needs allow. Unexpected combinations and \
-cross-domain leaps — well-understood principles from one field applied \
-to unsolved problems in another — are exactly what you are here for. \
-Do not water ideas down to seem safe.
-
-Two rules keep this grounded:
-
-1. Every idea must remain buildable. Include a concrete sketch of HOW: \
-specific techniques, architectures, materials, algorithms, or processes. \
-Speculative is fine; physically impossible or hand-waved is not.
-2. Do NOT self-censor on market size, cost, or commercial polish. A \
-separate feasibility critic applies that scrutiny downstream — your job \
-is to give it ambitious raw material, not pre-filtered safe bets.
-
-For each idea:
-- **title**: concise name (5-10 words)
-- **description**: substantive explanation (5-8 sentences) covering what \
-the idea is, how it addresses the need, the sketch of how it would be \
-built, any cross-domain technique it draws on, and why it is novel
-
-Generate 4-6 ideas per unmet need — never fewer than 4. Each idea must \
-be concrete enough to evaluate: a specific technical proposition, not a \
-vague direction.\
-"""
-
-_REVISION_PROMPT = """\
-You are a patent ideation specialist revising your own earlier candidate \
-ideas. A council critic reviewed them and returned specific feedback on \
-each.
-
-For each candidate below, produce a revised version that addresses the \
-critic's feedback: make the technical path more concrete, sharpen the \
-commercial case, or follow up the cross-domain angle it flagged. Keep \
-what was already strong. Do not change the subject of a candidate — \
-develop it.
-
-Return exactly one revised idea per candidate, in the same order, with \
-the same output shape: title and description.\
-"""
-
-_RESPONSE_FORMAT = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "CandidateIdeas",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "ideas": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "description": {"type": "string"},
-                        },
-                        "required": ["title", "description"],
-                        "additionalProperties": False,
-                    },
-                },
-            },
-            "required": ["ideas"],
-            "additionalProperties": False,
-        },
-    },
-}
 
 
 class IdeaIdeator:
@@ -136,11 +64,11 @@ class IdeaIdeator:
         result = await self._router.call(
             role=self._role_name,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
             ],
             temperature=0.9,
-            response_format=_RESPONSE_FORMAT,
+            response_format=IDEAS_FORMAT,
         )
         model_id = result["model_id"]
         parsed = json.loads(result["content"])
@@ -160,6 +88,14 @@ class IdeaIdeator:
         )
         return ideas
 
+    async def novelty_filter(
+        self,
+        own: list[CandidateIdea],
+        prior_art: PriorArtAgent,
+    ) -> tuple[list[CandidateIdea], list[CandidateIdea]]:
+        """Hunt duplicates of this ideator's own ideas: (survivors, dropped)."""
+        return await run_novelty_filter(self._router, self._role_name, own, prior_art)
+
     async def revise(
         self,
         flagged: list[tuple[CandidateIdea, str]],
@@ -175,8 +111,8 @@ class IdeaIdeator:
         model_id, items = await request_revisions(
             self._router,
             role=self._role_name,
-            system_prompt=_REVISION_PROMPT,
-            response_format=_RESPONSE_FORMAT,
+            system_prompt=REVISION_PROMPT,
+            response_format=IDEAS_FORMAT,
             response_key="ideas",
             flagged=flagged,
             graph_context=graph_context,

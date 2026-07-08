@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from whitespace.schemas.patent import NormalisedDocument
+from whitespace.schemas.research import RawFinding
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,23 @@ class Normaliser:
             metadata={},
         )
 
+    def from_finding(self, finding: RawFinding) -> NormalisedDocument:
+        """Normalise a raw research finding for graph ingestion."""
+        metadata: dict[str, Any] = {
+            "query": finding.query,
+            "found_at": finding.found_at.isoformat(),
+        }
+        if finding.published:
+            metadata["published"] = finding.published
+        return NormalisedDocument(
+            title=finding.title,
+            content=finding.content,
+            source_type="web" if finding.source_type == "web" else "api",
+            source_url=finding.source_url,
+            source_name=finding.source_name,
+            metadata=metadata,
+        )
+
     def from_upload(self, filename: str, content: str) -> NormalisedDocument:
         """Normalise a user-uploaded document."""
         title = _extract_title(content, fallback=filename)
@@ -70,6 +88,16 @@ class Normaliser:
             source_name=filename,
             metadata={},
         )
+
+
+def describe_finding(doc: NormalisedDocument) -> str:
+    """Episode source description carrying provenance and dates."""
+    bits = [f"{doc.source_type} research finding: {doc.source_name}"]
+    if doc.metadata.get("published"):
+        bits.append(f"published {doc.metadata['published']}")
+    if doc.metadata.get("query"):
+        bits.append(f"found via query: {doc.metadata['query']}")
+    return "; ".join(bits)
 
 
 def _extract_title(content: str, *, fallback: str) -> str:

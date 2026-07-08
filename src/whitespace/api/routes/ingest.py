@@ -40,6 +40,7 @@ async def trigger_ingest(
     request: Request,
     domain: str = Form(...),
     cpc_class: str | None = Form(None),
+    keep_findings: bool = Form(False),
     profile_files: list[UploadFile] = File(default=[]),
     domain_files: list[UploadFile] = File(default=[]),
     user: CurrentUser = Depends(get_current_user),
@@ -58,6 +59,7 @@ async def trigger_ingest(
             "cpc_classes": [cpc_class] if cpc_class else [],
             "profile_paths": profile_paths,
             "domain_paths": domain_paths,
+            "keep_findings": keep_findings,
         },
     )
     return JobResponse(job_id=job_id, status=JobStatus.PENDING)
