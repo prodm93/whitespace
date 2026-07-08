@@ -195,6 +195,14 @@ resource "aws_lambda_function" "pipeline_orchestrator" {
   timeout       = 900
   memory_size   = 2048
 
+  # Durable execution: the whole analysis flow is one checkpointed run
+  # (up to 24h) with a zero-cost callback wait at the HITL gap selection.
+  # Requires AWS provider >= 6.x; run terraform plan before deploying.
+  durable_config {
+    execution_timeout        = 86400
+    retention_period_in_days = 7
+  }
+
   environment {
     variables = {
       MODE                    = "saas"
@@ -215,21 +223,84 @@ resource "aws_lambda_function" "pipeline_orchestrator" {
 
 resource "aws_lambda_event_source_mapping" "sqs_ingest" {
   event_source_arn = var.ingest_queue_arn
-  function_name    = aws_lambda_function.pipeline_orchestrator.arn
+  function_name    = aws_lambda_function.durable_dispatcher.arn
   batch_size       = 1
   enabled          = true
 }
 
 resource "aws_lambda_event_source_mapping" "sqs_gap_council" {
   event_source_arn = var.gap_council_queue_arn
-  function_name    = aws_lambda_function.pipeline_orchestrator.arn
+  function_name    = aws_lambda_function.durable_dispatcher.arn
   batch_size       = 1
   enabled          = true
 }
 
+# SQS mappings invoke synchronously, which caps a durable execution at
+# one 15-minute slice. This thin dispatcher async-invokes the durable
+# pipeline function instead.
+resource "aws_lambda_function" "durable_dispatcher" {
+  function_name    = "${var.name_prefix}-durable-dispatcher"
+  role             = aws_iam_role.dispatcher.arn
+  runtime          = "python3.12"
+  handler          = "handler.handler"
+  filename         = "${path.module}/../../lambda_build/durable_dispatcher.zip"
+  timeout          = 60
+  memory_size      = 128
+
+  environment {
+    variables = {
+      PIPELINE_FUNCTION = aws_lambda_function.pipeline_orchestrator.function_name
+    }
+  }
+
+  tags = merge(var.common_tags, {
+    Name = "${var.name_prefix}-durable-dispatcher"
+  })
+}
+
+resource "aws_iam_role" "dispatcher" {
+  name = "${var.name_prefix}-dispatcher-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy" "dispatcher_invoke" {
+  name = "${var.name_prefix}-dispatcher-invoke"
+  role = aws_iam_role.dispatcher.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["lambda:InvokeFunction"]
+        Resource = aws_lambda_function.pipeline_orchestrator.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Resource = [var.ingest_queue_arn, var.gap_council_queue_arn, var.ideation_council_queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_lambda_event_source_mapping" "sqs_ideation_council" {
   event_source_arn = var.ideation_council_queue_arn
-  function_name    = aws_lambda_function.pipeline_orchestrator.arn
+  function_name    = aws_lambda_function.durable_dispatcher.arn
   batch_size       = 1
   enabled          = true
 }
