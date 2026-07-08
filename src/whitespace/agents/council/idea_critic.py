@@ -48,6 +48,13 @@ keeps the strongest material from every partner. Mark the partners \
 keep so their originals survive for provenance; the combination \
 appears once in the ranking, via the anchor candidate.
 
+The EVIDENCE section carries dates: publication dates, graph timestamps, \
+retrieval dates. Use them to judge **trends**: does this idea follow the \
+pattern of approaches that historically succeeded in this field, or the \
+pattern of ones that were tried and abandoned? Apply that lens to both \
+the technical trajectory and the commercial one, and put trend concerns \
+in your objections and delegate_back feedback where applicable.
+
 Score every candidate 1-10 on: novelty, technical_feasibility, \
 commercial_viability, specificity, profile_alignment.
 
