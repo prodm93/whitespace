@@ -62,3 +62,17 @@ class SessionStore(ABC):
     async def list_raw_findings(self, run_id: str | None = None) -> list[RawFinding]:
         """Return stored findings, newest first. Default: none."""
         return []
+
+    async def get_latest_gap_run(self) -> GapRun | None:
+        """Most recent gap run, for selection resolution and rerun memory."""
+        runs = await self.list_gap_runs()
+        return runs[0] if runs else None
+
+    async def save_discards(self, run_id: str, kind: str, items: list[dict[str, str]]) -> None:
+        """Persist candidates discarded for grounded reasons (critic kills,
+        novelty duplicates) so reruns never resurrect them. Default: no-op."""
+        return None
+
+    async def list_discards(self, kind: str | None = None) -> list[dict[str, str]]:
+        """Return discarded candidates ({title, description, reason, kind})."""
+        return []
