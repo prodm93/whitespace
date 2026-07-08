@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
+from whitespace.schemas.research import RawFinding
 
 
 class GapRun(BaseModel):
@@ -53,3 +54,11 @@ class SessionStore(ABC):
 
     @abstractmethod
     async def get_all_previous_proposals(self) -> list[IdeationProposal]: ...
+
+    async def save_raw_findings(self, run_id: str, findings: list[RawFinding]) -> None:
+        """Persist dated research findings. Default: no-op (opt-in feature)."""
+        return None
+
+    async def list_raw_findings(self, run_id: str | None = None) -> list[RawFinding]:
+        """Return stored findings, newest first. Default: none."""
+        return []

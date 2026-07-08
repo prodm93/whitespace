@@ -9,24 +9,26 @@ import aiosqlite
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
+from whitespace.schemas.research import RawFinding
 from whitespace.store.base import GapRun, IdeaRun, SessionStore
 
 logger = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS gap_runs (
-    run_id TEXT PRIMARY KEY,
-    timestamp TEXT NOT NULL,
-    needs_json TEXT NOT NULL
+    run_id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, needs_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS idea_runs (
-    run_id TEXT PRIMARY KEY,
-    gap_run_id TEXT NOT NULL,
-    selected_need_titles_json TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
+    run_id TEXT PRIMARY KEY, gap_run_id TEXT NOT NULL,
+    selected_need_titles_json TEXT NOT NULL, timestamp TEXT NOT NULL,
     proposals_json TEXT NOT NULL,
     FOREIGN KEY (gap_run_id) REFERENCES gap_runs(run_id)
+);
+
+CREATE TABLE IF NOT EXISTS raw_findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
+    found_at TEXT NOT NULL, finding_json TEXT NOT NULL
 );
 """
 
@@ -150,6 +152,30 @@ class SqliteSessionStore(SessionStore):
             raw = json.loads(row[0])
             all_proposals.extend(IdeationProposal.model_validate(p) for p in raw)
         return all_proposals
+
+    async def save_raw_findings(self, run_id: str, findings: list[RawFinding]) -> None:
+        if not findings:
+            return
+        await self._ensure_schema()
+        rows = [(run_id, f.found_at.isoformat(), f.model_dump_json()) for f in findings]
+        async with aiosqlite.connect(self._db_path) as db:
+            await db.executemany(
+                "INSERT INTO raw_findings (run_id, found_at, finding_json) VALUES (?, ?, ?)",
+                rows,
+            )
+            await db.commit()
+        logger.info("SqliteSessionStore: saved %d raw findings for run %s", len(rows), run_id)
+
+    async def list_raw_findings(self, run_id: str | None = None) -> list[RawFinding]:
+        await self._ensure_schema()
+        where = " WHERE run_id = ?" if run_id is not None else ""
+        params = (run_id,) if run_id is not None else ()
+        async with aiosqlite.connect(self._db_path) as db:
+            cursor = await db.execute(
+                f"SELECT finding_json FROM raw_findings{where} ORDER BY found_at DESC", params
+            )
+            rows = await cursor.fetchall()
+        return [RawFinding.model_validate_json(row[0]) for row in rows]
 
 
 def _row_to_gap_run(row: aiosqlite.Row) -> GapRun:
