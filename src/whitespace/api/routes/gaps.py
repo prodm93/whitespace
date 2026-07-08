@@ -22,5 +22,5 @@ async def trigger_gap_analysis(
     """Enqueue a gap analysis council run. Returns a job ID for polling."""
     logger.info("Gap analysis requested by user=%s", user.user_id)
     queue: JobQueue = request.app.state.queue
-    job_id = await queue.enqueue("gap_analysis", {})
+    job_id = await queue.enqueue("gap_analysis", {"fresh_start": body.fresh_start})
     return JobResponse(job_id=job_id, status=JobStatus.PENDING)

@@ -48,14 +48,3 @@ class IdeationProposal(BaseModel):
         default=None,
         description="Critic objections or caveats retained for provenance",
     )
-
-
-class PriorArtResult(BaseModel):
-    proposals: list[IdeationProposal] = Field(
-        ...,
-        description="Proposals with prior_art_notes populated where relevant",
-    )
-    prior_art_found: bool = Field(
-        ...,
-        description="Whether significant prior art was found for any proposal",
-    )

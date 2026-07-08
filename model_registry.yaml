@@ -26,6 +26,23 @@
 # Pricing is in USD per 1M tokens as of June 2026. Update when pricing changes.
 # The router divides by 1_000_000 to get per-token cost at runtime.
 
+orchestrator:
+  models:
+    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+      provider: anthropic
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 15.00
+        output_per_1m: 75.00
+    - model_id: "gpt-5.4"
+      provider: openai
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 2.50
+        output_per_1m: 10.00
+
 gap_identifier_1:
   models:
     - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"

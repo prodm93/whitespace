@@ -14,6 +14,7 @@ import logging
 from whitespace.config import Config
 from whitespace.orchestration.pipeline import Pipeline
 from whitespace.schemas.profile import ProfessionalProfile
+from whitespace.store.base import SessionStore
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,10 @@ class AppState:
     def __init__(self) -> None:
         self._pipeline: Pipeline | None = None
         self._profile: ProfessionalProfile | None = None
+        self._store: SessionStore | None = None
+        self._domain: str = ""
+        self._doc_paths: list[str] = []
+        self._keep_findings: bool = False
         self._lock = asyncio.Lock()
 
     async def get_pipeline(self) -> Pipeline:
@@ -33,9 +38,15 @@ class AppState:
                 if not config.neo4j_uri:
                     raise CredentialsNotSet("Neo4j URI is not set")
                 logger.info("AppState: building pipeline from current env")
-                self._pipeline = Pipeline.from_config(config)
+                self._pipeline = Pipeline.from_config(config, session_store=self._store)
                 await self._pipeline.initialise()
             return self._pipeline
+
+    def set_store(self, store: SessionStore) -> None:
+        self._store = store
+
+    def get_store(self) -> SessionStore | None:
+        return self._store
 
     def set_profile(self, profile: ProfessionalProfile) -> None:
         self._profile = profile
@@ -44,6 +55,20 @@ class AppState:
         if self._profile is None:
             raise ProfileNotReady("Profile has not been extracted yet")
         return self._profile
+
+    def set_pending_ingest(
+        self,
+        domain: str,
+        doc_paths: list[str],
+        keep_findings: bool,
+    ) -> None:
+        """Stage uploads and domain until the gap run ingests them."""
+        self._domain = domain
+        self._doc_paths = doc_paths
+        self._keep_findings = keep_findings
+
+    def get_pending_ingest(self) -> tuple[str, list[str], bool]:
+        return self._domain, self._doc_paths, self._keep_findings
 
     async def reset(self) -> None:
         async with self._lock:
