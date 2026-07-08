@@ -25,8 +25,10 @@ from whitespace.domain import IngestResult
 from whitespace.graph.graphiti_client import GraphitiClient
 from whitespace.schemas.ontology import OntologyDefinition
 from whitespace.schemas.ontology_compiler import compile_ontology
+from whitespace.schemas.patent import NormalisedDocument
 from whitespace.tools.document_loader import DocumentLoader
 from whitespace.tools.json_reader import JsonReader
+from whitespace.tools.normaliser import describe_finding
 from whitespace.tools.retry import retry_async
 from whitespace.tools.text_reader import TextReader
 
@@ -52,17 +54,20 @@ class GraphAgent:
         self,
         doc_paths: list[str],
         ontology: OntologyDefinition,
+        documents: list[NormalisedDocument] | None = None,
     ) -> IngestResult:
-        if not doc_paths:
+        documents = documents or []
+        if not doc_paths and not documents:
             logger.info("GraphAgent: no documents to ingest")
             return IngestResult(documents_processed=0)
 
         entity_types, edge_types, edge_type_map = compile_ontology(ontology)
         group_id = self._config.graphiti_namespace
         logger.info(
-            "GraphAgent: ingesting %d documents into group=%s "
+            "GraphAgent: ingesting %d files + %d research documents into group=%s "
             "(ontology: %d entity types, %d edge types, %d mappings)",
             len(doc_paths),
+            len(documents),
             group_id,
             len(entity_types),
             len(edge_types),
@@ -86,6 +91,27 @@ class GraphAgent:
                 failures += 1
                 failed.append(Path(path).name)
                 logger.exception("GraphAgent: failed to ingest %s", path)
+        for doc in documents:
+            try:
+                await retry_async(
+                    self._call_add_episode,
+                    doc.title or doc.source_name,
+                    f"{doc.title}\n\n{doc.content}",
+                    describe_finding(doc),
+                    EpisodeType.text,
+                    group_id,
+                    entity_types,
+                    edge_types,
+                    edge_type_map,
+                    retries=2,
+                    base_delay=2.0,
+                    max_delay=15.0,
+                )
+                successes += 1
+            except Exception:
+                failures += 1
+                failed.append(doc.source_name)
+                logger.exception("GraphAgent: failed to ingest finding %s", doc.source_name)
 
         logger.info(
             "GraphAgent: ingestion complete — %d ok, %d failed",
