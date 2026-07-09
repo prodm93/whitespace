@@ -1,4 +1,4 @@
-"""SQLite schema and row converters — extracted for the 200-line limit."""
+"""SQLite schema and row converters for the session store."""
 
 from __future__ import annotations
 

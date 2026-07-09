@@ -1,4 +1,4 @@
-"""Rendering helpers for ContextAgent — extracted for the 200-line limit."""
+"""Rendering helpers for ContextAgent."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""BYOK job handlers — extracted from the app factory for the 200-line limit."""
+"""Job handlers registered on the local queue in BYOK mode."""
 
 from __future__ import annotations
 

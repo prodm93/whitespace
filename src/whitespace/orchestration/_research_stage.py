@@ -1,7 +1,6 @@
 """Pre-council research stage: execute queries, dedup, store, ingest.
 
-Extracted from the gap council graph for the 200-line limit. Pure
-coordination — query crafting stays with the identifiers, judgment
+Pure coordination — query crafting stays with the identifiers, judgment
 stays with the council.
 """
 

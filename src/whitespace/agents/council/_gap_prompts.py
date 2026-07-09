@@ -1,4 +1,4 @@
-"""Prompts and response formats for the gap identifier — extracted for the 200-line limit."""
+"""Prompts and response formats for the gap identifier."""
 
 from __future__ import annotations
 

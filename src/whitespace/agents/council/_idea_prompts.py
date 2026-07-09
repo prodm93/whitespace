@@ -1,4 +1,4 @@
-"""Prompts and response formats for the idea ideator — extracted for the 200-line limit."""
+"""Prompts and response formats for the idea ideator."""
 
 from __future__ import annotations
 

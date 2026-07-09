@@ -1,4 +1,4 @@
-"""Dependency wiring for the pipeline — extracted for the 200-line limit."""
+"""Constructs and wires the pipeline's dependencies from a Config."""
 
 from __future__ import annotations
 
