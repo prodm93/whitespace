@@ -1,4 +1,4 @@
-# Debian 13 base image (python:3.11-slim) — no patches available from Debian.
+# Debian 13 base image (python:3.11-slim): no patches available from Debian.
 # None of these packages are used by our application. Revisit when Debian
 # releases fixes or when upgrading the base image.
 
@@ -53,13 +53,25 @@ CVE-2026-48962 exp:2026-10-01
 # https://www.openwall.com/lists/oss-security/2026/05/26/4
 CVE-2026-9538 exp:2026-10-01
 
-# gzip 1.13-1 — global buffer over-read in LZH decompression via poisoned
+# gzip 1.13-1: global buffer over-read in LZH decompression via poisoned
 # shared global state between LZW and LZH formats (CWE-126). Requires local
 # decompression of crafted archives; our container never invokes gzip on
 # untrusted LZH input. Fixed upstream (63dbf6b), not yet packaged for
 # Debian 13.
 # https://cert.pl/en/posts/2026/06/CVE-2026-41991/
 CVE-2026-41992 exp:2026-10-01
+
+# libblkid1/bsdutils/util-linux family 2.41-5: integer overflow in the DOS
+# partition table parser (parse_dos_extended in dos.c). A crafted lba_start
+# wraps a uint32_t addition and registers a fake partition at sector 0.
+# Requires libblkid to parse a malicious partition table: local block-device
+# access, udev/udisks2 auto-probing, or explicit blkid/mount on
+# attacker-controlled disk images. Our container never mounts block devices
+# or processes untrusted disk images; libblkid1 is an unused transitive
+# dependency of the base image. Fixed upstream in util-linux 2.42 / 2.41.4,
+# not yet backported to Debian 13.
+# https://security-tracker.debian.org/tracker/CVE-2026-53615
+CVE-2026-53615 exp:2026-10-01
 
 
 # ============================================================================
@@ -84,7 +96,7 @@ AVD-AWS-0011 exp:2026-10-01
 AVD-AWS-0132 exp:2026-10-01
 
 # SNS topic encrypted with AWS-managed key (alias/aws/sns) instead of a
-# Customer Managed Key. Same rationale as S3 CMK above — CMK adds $1/month
+# Customer Managed Key. Same rationale as S3 CMK above; CMK adds $1/month
 # for granular key management that isn't needed for alarm notifications on a
 # portfolio project. Upgrade to CMK when scaling up.
 # https://avd.aquasec.com/misconfig/aws-0136
