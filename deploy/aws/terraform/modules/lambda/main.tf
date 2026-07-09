@@ -211,6 +211,7 @@ resource "aws_lambda_function" "pipeline_orchestrator" {
       CHECKPOINTS_TABLE       = var.checkpoints_table_name
       CHECKPOINTS_BUCKET      = var.checkpoints_bucket_name
       JOBS_TABLE              = var.jobs_table_name
+      SESSIONS_TABLE          = var.sessions_table_name
     }
   }
 

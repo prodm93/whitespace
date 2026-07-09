@@ -57,3 +57,13 @@ output "checkpoints_table_arn" {
   description = "DynamoDB LangGraph checkpoints table ARN"
   value       = aws_dynamodb_table.checkpoints.arn
 }
+
+output "sessions_table_name" {
+  description = "DynamoDB session store table name"
+  value       = aws_dynamodb_table.sessions.name
+}
+
+output "sessions_table_arn" {
+  description = "DynamoDB session store table ARN"
+  value       = aws_dynamodb_table.sessions.arn
+}

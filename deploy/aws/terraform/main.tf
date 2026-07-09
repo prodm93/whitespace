@@ -79,6 +79,7 @@ module "lambda" {
   checkpoints_bucket_arn    = module.storage.checkpoints_bucket_arn
   checkpoints_table_name    = module.storage.checkpoints_table_name
   jobs_table_name           = module.storage.jobs_table_name
+  sessions_table_name       = module.storage.sessions_table_name
   ingest_queue_arn          = module.queue.ingest_queue_arn
   gap_council_queue_arn     = module.queue.gap_council_queue_arn
   ideation_council_queue_arn = module.queue.ideation_council_queue_arn

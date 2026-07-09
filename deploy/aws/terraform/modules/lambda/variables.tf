@@ -43,6 +43,11 @@ variable "jobs_table_name" {
   type        = string
 }
 
+variable "sessions_table_name" {
+  description = "DynamoDB session store table name"
+  type        = string
+}
+
 variable "ecr_repository_url" {
   description = "ECR repository URL for the pipeline orchestrator image"
   type        = string
