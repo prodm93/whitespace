@@ -26,7 +26,7 @@ class Config(BaseSettings):
     aura_instanceid: str = ""
     aura_instancename: str = ""
 
-    # BYOK (OpenRouter — single key, access to all providers)
+    # BYOK (OpenRouter: single key, access to all providers)
     openrouter_api_key: str = ""
 
     # Search API keys (BYOK or server-side)
@@ -37,17 +37,18 @@ class Config(BaseSettings):
     graphiti_namespace: str = "default"
     graphiti_model: str = "openai/gpt-4o-mini"
 
-    # SaaS-only — Clerk auth
+    # SaaS-only: Clerk auth
     clerk_issuer: str = ""
     clerk_jwks_url: str = ""
 
-    # SaaS-only — AWS resources
+    # SaaS-only: AWS resources
     sqs_queue_url: str = ""
     dynamodb_jobs_table: str = "whitespace-jobs"
     dynamodb_usage_table: str = "whitespace-usage"
+    sessions_table: str = ""
     aws_region: str = "us-east-1"
 
-    # Session store (BYOK — SQLite)
+    # Session store (BYOK: SQLite)
     sqlite_db_path: str = "data/whitespace.db"
 
     # Observability

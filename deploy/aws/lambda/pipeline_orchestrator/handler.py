@@ -3,7 +3,7 @@
 One durable execution covers the whole flow: profile extraction, the
 research-first gap analysis, a zero-compute-cost callback wait while
 the human selects gaps, then ideation. Every stage is a checkpointed
-step — a crash, timeout or redeploy replays past completed steps
+step; a crash, timeout or redeploy replays past completed steps
 instead of redoing them.
 
 Invocation: SQS → dispatcher (async invoke) → this function. Direct
@@ -19,8 +19,13 @@ import asyncio
 import json
 import logging
 import os
+from typing import TYPE_CHECKING
 
 from aws_durable_execution_sdk import DurableContext, durable_execution
+
+if TYPE_CHECKING:
+    from whitespace.config import Config
+    from whitespace.store.base import SessionStore
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -39,9 +44,23 @@ def _get_pipeline():
         from whitespace.config import Config
         from whitespace.orchestration.pipeline import Pipeline
 
-        _pipeline = Pipeline.from_config(Config())
+        config = Config()
+        session_store = _build_session_store(config)
+        _pipeline = Pipeline.from_config(config, session_store=session_store)
         asyncio.run(_pipeline.initialise())
     return _pipeline
+
+
+def _build_session_store(config: "Config") -> "SessionStore":
+    if config.sessions_table:
+        from whitespace.store.dynamo_store import DynamoSessionStore
+
+        return DynamoSessionStore(config.sessions_table, config.aws_region)
+
+    logger.warning("SESSIONS_TABLE not set; SaaS session persistence is disabled")
+    from whitespace.store.noop_store import NoopSessionStore
+
+    return NoopSessionStore()
 
 
 @durable_execution
