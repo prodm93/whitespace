@@ -35,3 +35,7 @@ class RawFinding(BaseModel):
         default_factory=_utc_now,
         description="When this finding was retrieved",
     )
+    domain: str | None = Field(
+        default=None,
+        description="Domain of the run that retrieved this finding",
+    )

@@ -13,6 +13,10 @@ class CandidateGap(BaseModel):
     source_role: str = Field(
         default="", description="Registry role of the identifier that produced this gap"
     )
+    evidence: list[str] = Field(
+        default_factory=list,
+        description="Citations behind this gap: finding keys and graph references",
+    )
 
 
 class GapExploration(BaseModel):
