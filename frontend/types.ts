@@ -28,7 +28,12 @@ export interface UploadedFile {
   size: number;
 }
 
-export type JobStatusValue = "pending" | "running" | "completed" | "failed";
+export type JobStatusValue =
+  | "pending"
+  | "running"
+  | "awaiting_selection"
+  | "completed"
+  | "failed";
 
 export interface JobResponse {
   job_id: string;
@@ -57,6 +62,9 @@ export interface UnmetNeed {
   why_unmet: string;
   matching_skills: string[];
   provenance: string[];
+  scores: Record<string, number>;
+  contributing_models: string[];
+  critique_notes: string | null;
 }
 
 export interface GapAnalysisResponse {
@@ -72,10 +80,32 @@ export interface IdeationProposal {
   limitations: string;
   provenance: string[];
   prior_art_notes: string | null;
+  scores: Record<string, number>;
+  contributing_models: string[];
+  critique_notes: string | null;
 }
 
 export interface IdeationResponse {
   proposals: IdeationProposal[];
+}
+
+export interface GapRun {
+  run_id: string;
+  timestamp: string;
+  needs: UnmetNeed[];
+}
+
+export interface IdeaRun {
+  run_id: string;
+  gap_run_id: string;
+  selected_need_titles: string[];
+  timestamp: string;
+  proposals: IdeationProposal[];
+}
+
+export interface LatestRunsResponse {
+  gap_run: GapRun | null;
+  idea_runs: IdeaRun[];
 }
 
 export type JobType = "ingest" | "gaps" | "ideation";
