@@ -3,6 +3,7 @@ import type {
   CredentialsResult,
   JobResponse,
   JobResult,
+  LatestRunsResponse,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -43,10 +44,12 @@ export async function triggerIngest(
   cpcClass: string,
   profileFiles: File[],
   domainFiles: File[],
+  keepFindings: boolean,
 ): Promise<JobResponse> {
   const form = new FormData();
   form.append("domain", domain);
   if (cpcClass) form.append("cpc_class", cpcClass);
+  form.append("keep_findings", String(keepFindings));
   profileFiles.forEach((f) => form.append("profile_files", f));
   domainFiles.forEach((f) => form.append("domain_files", f));
 
@@ -68,11 +71,13 @@ export async function pollJob(jobId: string): Promise<JobResult> {
   return res.json();
 }
 
-export async function triggerGapAnalysis(): Promise<JobResponse> {
+export async function triggerGapAnalysis(
+  freshStart = false,
+): Promise<JobResponse> {
   const res = await fetch(`${API_BASE}/api/gaps`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ fresh_start: freshStart }),
   });
   if (!res.ok) {
     throw new Error(`Gap analysis failed: ${res.status}`);
@@ -82,14 +87,26 @@ export async function triggerGapAnalysis(): Promise<JobResponse> {
 
 export async function triggerIdeation(
   selectedNeeds: string[],
+  freshStart = false,
 ): Promise<JobResponse> {
   const res = await fetch(`${API_BASE}/api/ideate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ selected_needs: selectedNeeds }),
+    body: JSON.stringify({
+      selected_needs: selectedNeeds,
+      fresh_start: freshStart,
+    }),
   });
   if (!res.ok) {
     throw new Error(`Ideation failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getLatestRuns(): Promise<LatestRunsResponse> {
+  const res = await fetch(`${API_BASE}/api/runs/latest`);
+  if (!res.ok) {
+    throw new Error(`Fetching latest runs failed: ${res.status}`);
   }
   return res.json();
 }

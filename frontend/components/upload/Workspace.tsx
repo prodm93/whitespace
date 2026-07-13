@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useCredentials } from "@/context/CredentialsContext";
 import type {
   GapAnalysisResponse,
   IdeationProposal,
   IdeationResponse,
   JobResult,
+  LatestRunsResponse,
   UnmetNeed,
   UploadedFile,
 } from "@/types";
 import {
+  getLatestRuns,
   triggerGapAnalysis,
   triggerIdeation,
   triggerIngest,
@@ -39,6 +41,7 @@ export default function Workspace() {
   const [domainFiles, setDomainFiles] = useState<UploadedFile[]>([]);
   const [domain, setDomain] = useState("");
   const [cpcClass, setCpcClass] = useState("");
+  const [keepFindings, setKeepFindings] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [phase, setPhase] = useState<Phase>("input");
@@ -46,6 +49,17 @@ export default function Workspace() {
   const [needs, setNeeds] = useState<UnmetNeed[]>([]);
   const [proposals, setProposals] = useState<IdeationProposal[]>([]);
   const [ideateSubmitting, setIdeateSubmitting] = useState(false);
+  const [latestRuns, setLatestRuns] = useState<LatestRunsResponse | null>(null);
+  const [resumeDismissed, setResumeDismissed] = useState(false);
+
+  useEffect(() => {
+    getLatestRuns()
+      .then(setLatestRuns)
+      .catch(() => {
+        // Rehydration is best-effort: no prior run, or the store isn't
+        // reachable yet. Either way the guided flow below still works.
+      });
+  }, []);
 
   const addProfile = useCallback((files: File[]) => {
     setProfileFiles((prev) => [...prev, ...files.map(toUploadedFile)]);
@@ -77,6 +91,7 @@ export default function Workspace() {
         cpcClass,
         profileFiles.map((f) => f.file),
         domainFiles.map((f) => f.file),
+        keepFindings,
       );
       setJobId(result.job_id);
       setPhase("ingesting");
@@ -85,7 +100,7 @@ export default function Workspace() {
     } finally {
       setSubmitting(false);
     }
-  }, [domain, cpcClass, profileFiles, domainFiles]);
+  }, [domain, cpcClass, profileFiles, domainFiles, keepFindings]);
 
   const handleIngestComplete = useCallback(async () => {
     try {
@@ -138,6 +153,16 @@ export default function Workspace() {
     }
   }, []);
 
+  const handleFreshStart = useCallback(async () => {
+    try {
+      const gapJob = await triggerGapAnalysis(true);
+      setJobId(gapJob.job_id);
+      setPhase("gap-running");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start fresh.");
+    }
+  }, []);
+
   const handleRetryIdeation = useCallback(() => {
     setPhase("gap-results");
     setJobId("");
@@ -153,6 +178,19 @@ export default function Workspace() {
     setPhase("gap-results");
     setJobId("");
   }, []);
+
+  const handleResume = useCallback(() => {
+    if (!latestRuns?.gap_run) return;
+    setNeeds(latestRuns.gap_run.needs);
+    const latestIdea = latestRuns.idea_runs[0];
+    if (latestIdea) {
+      setProposals(latestIdea.proposals);
+      setPhase("ideation-results");
+    } else {
+      setPhase("gap-results");
+    }
+    setResumeDismissed(true);
+  }, [latestRuns]);
 
   let backAction: () => void;
   let backLabel: string;
@@ -193,6 +231,7 @@ export default function Workspace() {
       <GapResults
         needs={needs}
         onIdeate={handleIdeate}
+        onFreshStart={handleFreshStart}
         submitting={ideateSubmitting}
       />
     );
@@ -210,6 +249,31 @@ export default function Workspace() {
   } else {
     content = (
       <section className="workspace">
+        {latestRuns?.gap_run && !resumeDismissed && (
+          <div className="workspace__resume">
+            <span className="workspace__resume-text">
+              You have a previous analysis from{" "}
+              {new Date(latestRuns.gap_run.timestamp).toLocaleString()}.
+            </span>
+            <div className="workspace__resume-actions">
+              <button
+                className="workspace__resume-yes"
+                onClick={handleResume}
+                type="button"
+              >
+                Resume where you left off
+              </button>
+              <button
+                className="workspace__resume-dismiss"
+                onClick={() => setResumeDismissed(true)}
+                type="button"
+              >
+                Start fresh
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="workspace__zones">
           <DropZone
             label="Your professional profile"
@@ -230,8 +294,10 @@ export default function Workspace() {
         <SearchPanel
           domain={domain}
           cpcClass={cpcClass}
+          keepFindings={keepFindings}
           onDomainChange={setDomain}
           onCpcChange={setCpcClass}
+          onKeepFindingsChange={setKeepFindings}
         />
 
         {error && <p className="workspace__error">{error}</p>}
@@ -253,6 +319,47 @@ export default function Workspace() {
             display: flex;
             flex-direction: column;
             gap: 36px;
+          }
+          .workspace__resume {
+            padding: 20px 24px;
+            border: 1px solid var(--accent-dim);
+            border-radius: var(--radius-md);
+            background: rgba(138, 69, 112, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            align-items: center;
+            text-align: center;
+          }
+          .workspace__resume-text {
+            font-size: var(--text-caption);
+            color: var(--text-secondary);
+          }
+          .workspace__resume-actions {
+            display: flex;
+            gap: 12px;
+          }
+          .workspace__resume-yes {
+            padding: 8px 20px;
+            font-size: var(--text-caption);
+            color: var(--text-primary);
+            background: var(--accent);
+            border-radius: var(--radius-md);
+            transition: box-shadow 0.2s var(--ease-out);
+          }
+          .workspace__resume-yes:hover {
+            box-shadow: 0 0 24px var(--accent-glow);
+          }
+          .workspace__resume-dismiss {
+            padding: 8px 20px;
+            font-size: var(--text-caption);
+            color: var(--text-secondary);
+            border: 1px solid var(--stroke-lavender);
+            border-radius: var(--radius-md);
+            transition: border-color 0.2s var(--ease-out);
+          }
+          .workspace__resume-dismiss:hover {
+            border-color: var(--accent);
           }
           .workspace__zones {
             display: grid;
