@@ -5,11 +5,17 @@ import type { UnmetNeed } from "@/types";
 
 interface NeedCardProps {
   need: UnmetNeed;
-  selected: boolean;
-  onToggle: () => void;
+  selected?: boolean;
+  onToggle?: () => void;
+  readOnly?: boolean;
 }
 
-export default function NeedCard({ need, selected, onToggle }: NeedCardProps) {
+export default function NeedCard({
+  need,
+  selected = false,
+  onToggle,
+  readOnly = false,
+}: NeedCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -17,15 +23,17 @@ export default function NeedCard({ need, selected, onToggle }: NeedCardProps) {
       className={`need-card ${selected ? "need-card--selected" : ""}`}
     >
       <div className="need-card__header">
-        <label className="need-card__check-wrap">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggle}
-            className="need-card__checkbox"
-          />
-          <span className="need-card__checkmark" />
-        </label>
+        {!readOnly && (
+          <label className="need-card__check-wrap">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggle}
+              className="need-card__checkbox"
+            />
+            <span className="need-card__checkmark" />
+          </label>
+        )}
 
         <button
           className="need-card__toggle"
@@ -78,6 +86,45 @@ export default function NeedCard({ need, selected, onToggle }: NeedCardProps) {
                   <li key={i} className="need-card__prov-item">{p}</li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {(need.contributing_models.length > 0 ||
+            Object.keys(need.scores).length > 0 ||
+            need.critique_notes) && (
+            <div className="need-card__section">
+              <h4 className="need-card__section-label">Council review</h4>
+
+              {need.contributing_models.length > 0 && (
+                <div className="need-card__models">
+                  {need.contributing_models.map((model) => (
+                    <span key={model} className="need-card__model-tag">
+                      {model}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {Object.keys(need.scores).length > 0 && (
+                <ul className="need-card__scores">
+                  {Object.entries(need.scores).map(([criterion, score]) => (
+                    <li key={criterion} className="need-card__score-item">
+                      <span className="need-card__score-criterion">
+                        {criterion.replace(/_/g, " ")}
+                      </span>
+                      <span className="need-card__score-value">{score}/10</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {need.critique_notes && (
+                <div className="need-card__callout">
+                  <p className="need-card__callout-text">
+                    {need.critique_notes}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -247,6 +294,54 @@ export default function NeedCard({ need, selected, onToggle }: NeedCardProps) {
           height: 5px;
           border-radius: 50%;
           background: var(--accent-dim);
+        }
+        .need-card__models {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-bottom: 10px;
+        }
+        .need-card__model-tag {
+          font-size: 11px;
+          font-weight: 400;
+          color: var(--text-secondary);
+          padding: 2px 8px;
+          border: 1px solid var(--stroke-lavender);
+          border-radius: var(--radius-sm);
+          letter-spacing: 0.02em;
+        }
+        .need-card__scores {
+          list-style: none;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px 20px;
+          margin-bottom: 10px;
+        }
+        .need-card__score-item {
+          display: flex;
+          align-items: baseline;
+          gap: 6px;
+          font-size: var(--text-caption);
+        }
+        .need-card__score-criterion {
+          color: var(--text-muted);
+          text-transform: capitalize;
+        }
+        .need-card__score-value {
+          color: var(--accent);
+          font-weight: 500;
+        }
+        .need-card__callout {
+          padding: 14px 18px;
+          border-left: 3px solid var(--accent);
+          background: rgba(138, 69, 112, 0.06);
+          border-radius: 0 var(--radius-md) var(--radius-md) 0;
+        }
+        .need-card__callout-text {
+          font-size: var(--text-caption);
+          font-weight: 300;
+          color: var(--text-primary);
+          line-height: 1.6;
         }
       `}</style>
     </article>

@@ -90,6 +90,45 @@ export default function ProposalCard({ proposal }: ProposalCardProps) {
             </div>
           )}
 
+          {(proposal.contributing_models.length > 0 ||
+            Object.keys(proposal.scores).length > 0 ||
+            proposal.critique_notes) && (
+            <div className="proposal-card__council">
+              <h4 className="proposal-card__section-label">Council review</h4>
+
+              {proposal.contributing_models.length > 0 && (
+                <div className="proposal-card__models">
+                  {proposal.contributing_models.map((model) => (
+                    <span key={model} className="proposal-card__model-tag">
+                      {model}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {Object.keys(proposal.scores).length > 0 && (
+                <ul className="proposal-card__scores">
+                  {Object.entries(proposal.scores).map(([criterion, score]) => (
+                    <li key={criterion} className="proposal-card__score-item">
+                      <span className="proposal-card__score-criterion">
+                        {criterion.replace(/_/g, " ")}
+                      </span>
+                      <span className="proposal-card__score-value">{score}/10</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {proposal.critique_notes && (
+                <div className="proposal-card__callout">
+                  <p className="proposal-card__callout-text">
+                    {proposal.critique_notes}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             className="proposal-card__export"
             onClick={handleExport}
@@ -225,6 +264,45 @@ export default function ProposalCard({ proposal }: ProposalCardProps) {
           font-size: var(--text-caption);
           color: var(--text-secondary);
           line-height: 1.5;
+        }
+        .proposal-card__council {
+          padding-top: 4px;
+        }
+        .proposal-card__models {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-bottom: 10px;
+        }
+        .proposal-card__model-tag {
+          font-size: 11px;
+          font-weight: 400;
+          color: var(--text-secondary);
+          padding: 2px 8px;
+          border: 1px solid var(--stroke-lavender);
+          border-radius: var(--radius-sm);
+          letter-spacing: 0.02em;
+        }
+        .proposal-card__scores {
+          list-style: none;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px 20px;
+          margin-bottom: 10px;
+        }
+        .proposal-card__score-item {
+          display: flex;
+          align-items: baseline;
+          gap: 6px;
+          font-size: var(--text-caption);
+        }
+        .proposal-card__score-criterion {
+          color: var(--text-muted);
+          text-transform: capitalize;
+        }
+        .proposal-card__score-value {
+          color: var(--accent);
+          font-weight: 500;
         }
         .proposal-card__export {
           align-self: flex-start;
