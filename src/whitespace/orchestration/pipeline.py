@@ -25,6 +25,7 @@ from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
 from whitespace.schemas.profile import ProfessionalProfile
 from whitespace.store.base import GapRun, IdeaRun, SessionStore
+from whitespace.tools.dedup import SemanticDeduplicator
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class Pipeline:
         ideation_council: IdeationCouncilGraph,
         query_graph: QueryGraph,
         router: ModelRouter,
+        dedup: SemanticDeduplicator,
         session_store: SessionStore | None = None,
     ) -> None:
         self._config = config
@@ -64,6 +66,7 @@ class Pipeline:
         self._ideation_council = ideation_council
         self._query = query_graph
         self._router = router
+        self._dedup = dedup
         self._store = session_store
 
     @classmethod
@@ -122,7 +125,10 @@ class Pipeline:
         """
         logger.info("Pipeline.analyse_gaps: domain=%r fresh=%s", domain, fresh_start)
         run_id = run_id or str(uuid.uuid4())
-        memory = RunMemory() if fresh_start else await load_gap_memory(self._store)
+        if fresh_start:
+            memory = RunMemory()
+        else:
+            memory = await load_gap_memory(self._store, domain, self._dedup)
         needs = await self._gap_council.run(
             profile,
             domain,
@@ -133,7 +139,12 @@ class Pipeline:
         )
         if self._store is not None and needs:
             await self._store.save_gap_run(
-                GapRun(run_id=run_id, timestamp=datetime.now(UTC), needs=needs)
+                GapRun(
+                    run_id=run_id,
+                    timestamp=datetime.now(UTC),
+                    needs=needs,
+                    domain=domain.strip().lower(),
+                )
             )
         return needs
 

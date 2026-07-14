@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, TypedDict
+from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
 
@@ -14,38 +14,23 @@ from whitespace.agents.council.gap_synthesiser import GapSynthesiser
 from whitespace.orchestration._council_common import (
     assign_candidate_ids,
     collect_batches,
-    resolve_final,
-    run_targeted_revision,
     should_revise,
+)
+from whitespace.orchestration._gap_council_state import GapCouncilState
+from whitespace.orchestration._gap_critique_phase import (
+    run_critic_node,
+    run_revision_node,
+    run_synth_node,
 )
 from whitespace.orchestration._research_stage import (
     ResearchStage,
     RunMemory,
     format_findings,
 )
-from whitespace.schemas.critique import CriticReport
-from whitespace.schemas.gap import CandidateGap, GapExploration, UnmetNeed
+from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.profile import ProfessionalProfile
 
 logger = logging.getLogger(__name__)
-
-_MAX_EVIDENCE_CHARS = 40000
-
-
-class GapCouncilState(TypedDict, total=False):
-    domain: str
-    profile: ProfessionalProfile
-    doc_paths: list[str]
-    keep_findings: bool
-    run_id: str
-    run_memory: RunMemory
-    queries: list[str]
-    findings_text: str
-    findings_by_role: dict[str, str]
-    candidates: list[CandidateGap]
-    report: CriticReport | None
-    revision_round: int
-    synthesised_needs: list[UnmetNeed]
 
 
 class GapCouncilGraph:
@@ -107,15 +92,14 @@ class GapCouncilGraph:
             "run_memory": run_memory or RunMemory(),
         }
         final_state = await self._compiled.ainvoke(initial_state)
-        needs: list[UnmetNeed] = final_state.get("synthesised_needs", [])
-        return needs
+        return cast(list[UnmetNeed], final_state.get("synthesised_needs", []))
 
     async def _run_craft_queries(self, state: GapCouncilState) -> dict[str, Any]:
         roles = list(self._identifiers)
         memory = state["run_memory"]
         tasks = [
             self._identifiers[role].craft_queries(
-                state["domain"], state["profile"], memory.prior_queries
+                state["domain"], state["profile"], memory.prior_queries, memory.neighbours
             )
             for role in roles
         ]
@@ -128,6 +112,7 @@ class GapCouncilGraph:
     async def _run_research(self, state: GapCouncilState) -> dict[str, Any]:
         findings = await self._research.research(
             state["queries"],
+            domain=state["domain"],
             keep_findings=state["keep_findings"],
             run_id=state["run_id"],
             prior_queries=state["run_memory"].prior_queries,
@@ -138,62 +123,36 @@ class GapCouncilGraph:
 
     async def _run_identifiers(self, state: GapCouncilState) -> dict[str, Any]:
         roles = list(self._identifiers)
+        mem = state["run_memory"]
         tasks = [
             self._identifiers[role].run(
-                state["profile"], state["findings_text"], state["run_memory"].memory
+                state["profile"], state["findings_text"], mem.memory, mem.neighbours
             )
             for role in roles
         ]
-        batches: list[tuple[str, GapExploration]] = await collect_batches(
-            roles, tasks, "GapCouncilGraph"
-        )
+        batches = await collect_batches(roles, tasks, "GapCouncilGraph")
         pool = assign_candidate_ids([(role, out.gaps) for role, out in batches])
-        pool = await self._research.gate_pool(
-            pool, state["run_memory"].prior_texts, state["run_id"], "gap"
+        pool, flags = await self._research.gate_pool(
+            pool, state["run_memory"].prior_texts, state["run_id"], "gap", state["domain"]
         )
         logger.info("GapCouncilGraph: %d candidates after gate", len(pool))
         return {
             "candidates": pool,
+            "gate_flags": flags,
             "findings_by_role": {role: out.findings for role, out in batches},
             "report": None,
             "revision_round": 0,
         }
 
-    async def _run_critic(self, state: GapCouncilState) -> dict[str, Any]:
-        report = await self._critic.run(
-            state["candidates"], state["profile"], evidence=state["findings_text"]
-        )
-        return {"report": report}
-
     def _route_after_critic(self, state: GapCouncilState) -> str:
-        return (
-            "revise" if should_revise(state["report"], state["revision_round"]) else "synthesiser"
-        )
+        rd, rr = state["report"], state["revision_round"]
+        return "revise" if should_revise(rd, rr) else "synthesiser"
+
+    async def _run_critic(self, state: GapCouncilState) -> dict[str, Any]:
+        return await run_critic_node(self._identifiers, self._critic, self._research, state)
 
     async def _run_revision(self, state: GapCouncilState) -> dict[str, Any]:
-        report = state["report"]
-        assert report is not None
-        pool = await run_targeted_revision(
-            {role: agent.revise for role, agent in self._identifiers.items()},
-            report,
-            state["candidates"],
-            state["findings_by_role"],
-            state["profile"],
-            "GapCouncilGraph",
-        )
-        return {"candidates": pool, "revision_round": state["revision_round"] + 1}
+        return await run_revision_node(self._identifiers, self._research, state)
 
     async def _run_synthesiser(self, state: GapCouncilState) -> dict[str, Any]:
-        report = state["report"]
-        assert report is not None
-        resolved = resolve_final(report)
-        await self._research.record_kills(resolved, state["candidates"], state["run_id"], "gap")
-        roles = {c.source_role for c in state["candidates"] if c.candidate_id in report.ranking}
-        evidence = state["findings_text"] + "".join(
-            f"\n\n## Exploration by {r}\n{state['findings_by_role'].get(r, '')}"
-            for r in sorted(roles)
-        )
-        needs = await self._synthesiser.run(
-            state["candidates"], resolved, evidence[:_MAX_EVIDENCE_CHARS], state["profile"]
-        )
-        return {"synthesised_needs": needs}
+        return await run_synth_node(self._synthesiser, self._research, state)

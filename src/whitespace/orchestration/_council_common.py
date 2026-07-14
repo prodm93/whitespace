@@ -103,6 +103,19 @@ def replace_candidates(pool: list[C], revised: list[C]) -> list[C]:
     return [by_id.get(c.candidate_id, c) for c in pool]
 
 
+def build_flag_evidence(flags: dict[str, str]) -> str:
+    """Render a RESEMBLES PRIOR WORK section from gate flags for the critic."""
+    if not flags:
+        return ""
+    lines = [f"- {cid}: {note}" for cid, note in flags.items()]
+    return (
+        "\n\n## RESEMBLES PRIOR WORK\n\n"
+        "The following candidates scored close to output from previous runs. For each, judge "
+        "explicitly whether it adds genuinely new insight beyond the prior text before deciding "
+        "keep or kill.\n\n" + "\n".join(lines)
+    )
+
+
 def resolve_final(report: CriticReport) -> CriticReport:
     """Resolve unresolved delegate_back verdicts once revision rounds are spent.
 

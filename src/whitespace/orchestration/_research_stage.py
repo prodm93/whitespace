@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 
 C = TypeVar("C", bound=CandidateLike)
 
+_GATE_KILL_THRESHOLD = 0.95
+_GATE_FLAG_FLOOR = 0.85
+_MAX_FINDINGS_CHARS = 20000
+
 
 @dataclass
 class RunMemory:
@@ -32,19 +36,23 @@ class RunMemory:
     prior_findings: list[RawFinding] = field(default_factory=list)
     memory: str = ""
     prior_texts: list[str] = field(default_factory=list)
-
-
-_MAX_FINDINGS_CHARS = 20000
+    neighbours: str = ""
 
 
 def format_findings(findings: list[RawFinding]) -> str:
-    """Render dated findings as the raw-evidence channel for prompts."""
+    """Render dated findings with stable [F{i}] keys for the raw-evidence channel."""
     lines = [
-        f"- [{f.source_type}] {f.title} ({f.published or 'n.d.'}; found {f.found_at:%Y-%m-%d}"
-        f"; query: {f.query}): {f.content[:400]}"
-        for f in findings
+        f"- [F{i}] [{f.source_type}] {f.title}"
+        f" ({f.published or 'n.d.'}; found {f.found_at:%Y-%m-%d}; query: {f.query}):"
+        f" {f.content[:400]}"
+        for i, f in enumerate(findings, 1)
     ]
-    return "\n".join(lines)[:_MAX_FINDINGS_CHARS] or "(no research findings)"
+    joined = "\n".join(lines)
+    if not joined:
+        return "(no research findings)"
+    if len(joined) > _MAX_FINDINGS_CHARS:
+        return joined[:_MAX_FINDINGS_CHARS] + "\n[truncated]"
+    return joined
 
 
 class ResearchStage:
@@ -64,10 +72,15 @@ class ResearchStage:
         self._ingest = ingest_graph
         self._store = store
 
+    @property
+    def deduplicator(self) -> SemanticDeduplicator:
+        return self._dedup
+
     async def research(
         self,
         queries: list[str],
         *,
+        domain: str,
         keep_findings: bool,
         run_id: str,
         prior_queries: list[str] | None = None,
@@ -87,7 +100,9 @@ class ResearchStage:
                 "ResearchStage: skipping %d already-executed queries",
                 len(queries) - len(fresh_queries),
             )
-        new_findings = await self._prior_art.research(fresh_queries)
+        raw = await self._prior_art.research(fresh_queries)
+        norm_domain = domain.strip().lower()
+        new_findings = [f.model_copy(update={"domain": norm_domain}) for f in raw]
         pool = await self._dedup.dedup(prior_findings + new_findings)
         new_ids = {id(f) for f in new_findings}
         if keep_findings and self._store is not None:
@@ -100,29 +115,41 @@ class ResearchStage:
         prior_texts: list[str],
         run_id: str,
         kind: str,
-    ) -> list[C]:
-        """Drop candidates near-identical to previous runs' output; record them."""
+        domain: str = "",
+    ) -> tuple[list[C], dict[str, str]]:
+        """Score candidates against previous runs' output; kill duplicates, flag near-matches.
+
+        Returns the surviving pool and a flags dict mapping candidate IDs
+        to a note for the critic when a candidate is in the grey zone.
+        """
         if not prior_texts or not pool:
-            return pool
-        mask = await self._dedup.novel_mask(
-            [f"{c.title}: {c.description}" for c in pool], prior_texts
-        )
-        dropped = [c for c, keep in zip(pool, mask, strict=True) if not keep]
-        if dropped:
-            await self.record_discards(
-                run_id,
-                kind,
-                [
+            return pool, {}
+        candidate_texts = [f"{c.title}: {c.description}" for c in pool]
+        scored = await self._dedup.score_against_with_best(candidate_texts, prior_texts)
+        kept: list[C] = []
+        flags: dict[str, str] = {}
+        kill_items: list[dict[str, str]] = []
+        for candidate, (score, best_match) in zip(pool, scored, strict=True):
+            if score >= _GATE_KILL_THRESHOLD:
+                kill_items.append(
                     {
-                        "title": c.title,
-                        "description": c.description,
+                        "title": candidate.title,
+                        "description": candidate.description,
                         "reason": "near-duplicate of a previous run's output",
+                        "domain": domain,
                     }
-                    for c in dropped
-                ],
-            )
-            logger.info("ResearchStage: gated %d cross-run duplicates", len(dropped))
-        return [c for c, keep in zip(pool, mask, strict=True) if keep]
+                )
+            elif score >= _GATE_FLAG_FLOOR:
+                kept.append(candidate)
+                flags[candidate.candidate_id] = (
+                    f"resembles prior work (score {score:.2f}): {best_match[:200]}"
+                )
+            else:
+                kept.append(candidate)
+        if kill_items:
+            await self.record_discards(run_id, kind, kill_items, domain)
+            logger.info("ResearchStage: gated %d cross-run duplicates", len(kill_items))
+        return kept, flags
 
     async def record_kills(
         self,
@@ -130,6 +157,7 @@ class ResearchStage:
         pool: list[C],
         run_id: str,
         kind: str,
+        domain: str = "",
     ) -> None:
         """Persist critic kills with their objections so reruns avoid them."""
         by_id = {c.candidate_id: c for c in pool}
@@ -138,13 +166,16 @@ class ResearchStage:
                 "title": by_id[a.candidate_id].title,
                 "description": by_id[a.candidate_id].description,
                 "reason": a.objections or "killed by council critic",
+                "domain": domain,
             }
             for a in report.assessments
             if a.verdict == "kill" and a.candidate_id in by_id
         ]
-        await self.record_discards(run_id, kind, items)
+        await self.record_discards(run_id, kind, items, domain)
 
-    async def record_discards(self, run_id: str, kind: str, items: list[dict[str, str]]) -> None:
+    async def record_discards(
+        self, run_id: str, kind: str, items: list[dict[str, str]], domain: str = ""
+    ) -> None:
         if self._store is not None and items:
             await self._store.save_discards(run_id, kind, items)
 

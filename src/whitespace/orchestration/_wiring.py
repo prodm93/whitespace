@@ -98,6 +98,7 @@ def _build_pipeline(
         GapIdentifier(config, router, f"gap_identifier_{i}", graph_actions) for i in range(1, 4)
     ]
     idea_ideators = [IdeaIdeator(config, router, f"idea_ideator_{i}") for i in range(1, 4)]
+    dedup = SemanticDeduplicator(graphiti)
 
     return cls(
         config=config,
@@ -110,13 +111,7 @@ def _build_pipeline(
             gap_identifiers,
             GapCritic(config, router),
             GapSynthesiser(config, router),
-            ResearchStage(
-                prior_art,
-                SemanticDeduplicator(graphiti),
-                Normaliser(),
-                ingest_graph,
-                store=session_store,
-            ),
+            ResearchStage(prior_art, dedup, Normaliser(), ingest_graph, store=session_store),
         ),
         ideation_council=IdeationCouncilGraph(
             idea_ideators,
@@ -126,5 +121,6 @@ def _build_pipeline(
         ),
         query_graph=QueryGraph(context_agent, generator),
         router=router,
+        dedup=dedup,
         session_store=session_store,
     )

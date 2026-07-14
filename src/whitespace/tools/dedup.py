@@ -53,23 +53,47 @@ class SemanticDeduplicator:
         )
         return kept
 
-    async def novel_mask(self, texts: list[str], reference: list[str]) -> list[bool]:
-        """True per text if it is NOT a near-duplicate of any reference text.
+    async def score_against(self, texts: list[str], reference: list[str]) -> list[float]:
+        """Each text's max cosine against the reference set.
 
-        Used as the cross-run gate: candidates too similar to previously
-        surfaced or previously discarded work are dropped before costing
-        any further model calls.
+        Returns 0.0 for all texts on embedding failure (fail-open: callers
+        keep everything rather than silently gating on an error).
         """
         if not texts or not reference:
-            return [True] * len(texts)
+            return [0.0] * len(texts)
         embedder = self._graphiti.graphiti.embedder
         try:
             vectors = await embedder.create_batch([t[:_EMBED_CHARS] for t in texts + reference])
         except Exception:
-            logger.exception("SemanticDeduplicator: embedding failed; keeping all")
-            return [True] * len(texts)
-        text_vecs, ref_vecs = vectors[: len(texts)], vectors[len(texts) :]
-        return [all(_cosine(tv, rv) < self._threshold for rv in ref_vecs) for tv in text_vecs]
+            logger.exception("SemanticDeduplicator: embedding failed; returning 0.0 scores")
+            return [0.0] * len(texts)
+        text_vecs = vectors[: len(texts)]
+        ref_vecs = vectors[len(texts) :]
+        return [max(_cosine(tv, rv) for rv in ref_vecs) for tv in text_vecs]
+
+    async def score_against_with_best(
+        self, texts: list[str], reference: list[str]
+    ) -> list[tuple[float, str]]:
+        """(max cosine, best-matching reference text) per text.
+
+        Returns (0.0, '') for all texts on embedding failure.
+        """
+        if not texts or not reference:
+            return [(0.0, "")] * len(texts)
+        embedder = self._graphiti.graphiti.embedder
+        try:
+            vectors = await embedder.create_batch([t[:_EMBED_CHARS] for t in texts + reference])
+        except Exception:
+            logger.exception("SemanticDeduplicator: embedding failed; returning 0.0 scores")
+            return [(0.0, "")] * len(texts)
+        text_vecs = vectors[: len(texts)]
+        ref_vecs = vectors[len(texts) :]
+        result: list[tuple[float, str]] = []
+        for tv in text_vecs:
+            sims = [_cosine(tv, rv) for rv in ref_vecs]
+            best_idx = max(range(len(sims)), key=lambda i: sims[i])
+            result.append((sims[best_idx], reference[best_idx]))
+        return result
 
 
 def _drop_exact(findings: list[RawFinding]) -> tuple[list[RawFinding], list[str]]:
