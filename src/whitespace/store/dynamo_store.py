@@ -66,11 +66,8 @@ class DynamoSessionStore(SessionStore):
         return None
 
     async def get_all_previous_needs(self) -> list[UnmetNeed]:
-        rows = await self._query(items.GAPRUN_PK)
-        needs: list[UnmetNeed] = []
-        for row in rows:
-            needs.extend(items.needs_from_gap_run_item(row))
-        return needs
+        runs = await self.list_gap_runs()
+        return [need for run in runs for need in run.needs]
 
     async def get_all_previous_proposals(self) -> list[IdeationProposal]:
         rows = await self._query(items.IDEARUN_PK)

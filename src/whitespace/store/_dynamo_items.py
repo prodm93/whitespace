@@ -71,6 +71,7 @@ def discard_to_item(run_id: str, kind: str, entry: dict[str, str]) -> dict[str, 
         "title": entry.get("title", ""),
         "description": entry.get("description", ""),
         "reason": entry.get("reason", ""),
+        "domain": entry.get("domain", ""),
     }
 
 
@@ -80,6 +81,7 @@ def item_to_discard(item: dict[str, Any]) -> dict[str, str]:
         "title": item["title"],
         "description": item["description"],
         "reason": item["reason"],
+        "domain": item.get("domain", ""),
     }
 
 

@@ -138,6 +138,35 @@ class TestDiscardItem:
         assert discard["reason"] == ""
 
 
+class TestGapRunDomain:
+    def test_domain_survives_round_trip(self) -> None:
+        run = GapRun(
+            run_id="r1",
+            timestamp=datetime(2026, 7, 1, tzinfo=UTC),
+            needs=[],
+            domain="lithium-ion batteries",
+        )
+        item = items.gap_run_to_item(run)
+        assert items.item_to_gap_run(item).domain == "lithium-ion batteries"
+
+    def test_none_domain_survives_round_trip(self) -> None:
+        run = GapRun(run_id="r2", timestamp=datetime(2026, 7, 1, tzinfo=UTC), needs=[], domain=None)
+        item = items.gap_run_to_item(run)
+        assert items.item_to_gap_run(item).domain is None
+
+
+class TestDiscardDomain:
+    def test_domain_stored_and_returned(self) -> None:
+        entry = {"title": "T", "description": "D", "reason": "R", "domain": "robotics"}
+        item = items.discard_to_item("r1", "gap", entry)
+        discard = items.item_to_discard(item)
+        assert discard["domain"] == "robotics"
+
+    def test_missing_domain_defaults_to_empty_string(self) -> None:
+        item = items.discard_to_item("r1", "gap", {"title": "T", "description": "D"})
+        assert items.item_to_discard(item)["domain"] == ""
+
+
 class TestSortKeyOrdering:
     def test_later_gap_run_sorts_after_earlier_as_plain_string(self) -> None:
         earlier = GapRun(run_id="a", timestamp=datetime(2026, 1, 1, tzinfo=UTC), needs=[])

@@ -14,6 +14,7 @@ class GapRun(BaseModel):
     run_id: str = Field(..., description="Unique identifier for this gap analysis run")
     timestamp: datetime = Field(..., description="When the run completed")
     needs: list[UnmetNeed] = Field(default_factory=list)
+    domain: str | None = Field(default=None, description="Normalised domain string for this run")
 
 
 class IdeaRun(BaseModel):
@@ -74,5 +75,5 @@ class SessionStore(ABC):
         return None
 
     async def list_discards(self, kind: str | None = None) -> list[dict[str, str]]:
-        """Return discarded candidates ({title, description, reason, kind})."""
+        """Return discarded candidates ({title, description, reason, kind, domain})."""
         return []
