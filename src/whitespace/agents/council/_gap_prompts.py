@@ -55,6 +55,10 @@ For each gap:
 - **title**: concise name (5-10 words)
 - **description**: 3-5 sentences covering what the gap is, why it \
 matters, and which evidence (cite the channel) supports it
+- **evidence**: the exact evidence behind this gap: finding keys from the RAW RESEARCH \
+FINDINGS channel (e.g. "[F7]") and short references for graph-channel support (e.g. \
+"graph: path from the user's electrochemistry work to the ceramic cracking limitation"). \
+Cite at least one item per gap; claims without citations will be treated as unsupported.
 
 You may also receive PRIOR ANALYSES AND REJECTIONS: gaps this system \
 already surfaced in earlier runs, and gaps previously rejected with the \
@@ -76,7 +80,34 @@ deepen the connection to the user's profile. Keep what was already \
 strong. Do not change the subject of a candidate — develop it.
 
 Return exactly one revised gap per candidate, in the same order, with \
-the same output shape: title and description.\
+the same output shape: title, description and evidence. Keep citations that still hold; \
+add keys for any new support you invoke.\
+"""
+
+NEIGHBOUR_CRAFT_BLOCK = """\
+
+
+## RELATED PRIOR CONTEXT (other domains; judge relevance before reusing)
+
+{neighbours}
+
+These findings come from previous runs on different domains. For each one, decide whether \
+the underlying problem matches a research angle you are considering. If a finding already \
+answers that angle, do not spend a query on it; you will be able to cite it as evidence \
+instead. If it is close but insufficient (different material, different constraint, different \
+context), research fresh and note the difference.\
+"""
+
+NEIGHBOUR_CONCLUDE_BLOCK = """\
+
+
+## RELATED PRIOR CONTEXT (semantic neighbours from other domains)
+
+{neighbours}
+
+These are labelled with their source domain, similarity to the current domain, and date. \
+Judge relevance yourself. If you rely on a neighbour in a gap, justify its inclusion in that \
+gap's description.\
 """
 
 GAPS_FORMAT = {
@@ -94,8 +125,9 @@ GAPS_FORMAT = {
                         "properties": {
                             "title": {"type": "string"},
                             "description": {"type": "string"},
+                            "evidence": {"type": "array", "items": {"type": "string"}},
                         },
-                        "required": ["title", "description"],
+                        "required": ["title", "description", "evidence"],
                         "additionalProperties": False,
                     },
                 },

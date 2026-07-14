@@ -42,11 +42,15 @@ def format_pool(candidates: Sequence[CandidateLike]) -> str:
     """Render the candidate pool for the critic, with IDs and source models."""
     sections: list[str] = []
     for c in candidates:
-        sections.append(
+        entry = (
             f"- id: {c.candidate_id} | source model: {c.source_model}\n"
             f"  **{c.title}**\n"
             f"  {c.description}"
         )
+        evidence = getattr(c, "evidence", [])
+        if evidence:
+            entry += f"\n  evidence: {', '.join(evidence)}"
+        sections.append(entry)
     return "\n\n".join(sections)
 
 
@@ -72,6 +76,9 @@ def format_for_synthesis(pool: Sequence[CandidateLike], report: CriticReport) ->
             lines.append(f"   Original for provenance: {candidate.description}")
         else:
             lines.append(f"   {candidate.description}")
+        evidence = getattr(candidate, "evidence", [])
+        if evidence:
+            lines.append(f"   evidence: {', '.join(evidence)}")
         if assessment:
             if assessment.scores:
                 scored = ", ".join(f"{k}: {v}" for k, v in assessment.scores.items())

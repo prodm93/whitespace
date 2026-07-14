@@ -52,7 +52,9 @@ context
 to addressing this gap (use the exact skill names from the profile)
 - **provenance**: list the graph paths or source references that \
 support this gap's existence, formatted as \
-"[SOURCE → EDGE_TYPE → TARGET]" or "source: <document name>"
+"[SOURCE → EDGE_TYPE → TARGET]" or "source: <document name>". \
+Include each surviving gap's cited finding keys and graph references in \
+its provenance list.
 - **source_candidate_ids**: the IDs of every candidate this entry drew \
 from — the ranked anchor plus any combined candidates\
 """

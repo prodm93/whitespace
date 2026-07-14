@@ -11,6 +11,8 @@ from whitespace.agents.council._gap_prompts import (
     CONCLUDE_PROMPT,
     EXPLORE_PROMPT,
     GAPS_FORMAT,
+    NEIGHBOUR_CONCLUDE_BLOCK,
+    NEIGHBOUR_CRAFT_BLOCK,
     QUERY_PROMPT,
     REVISION_PROMPT,
 )
@@ -57,6 +59,7 @@ class GapIdentifier:
         domain: str,
         profile: ProfessionalProfile,
         prior_queries: list[str] | None = None,
+        neighbours: str = "",
     ) -> list[str]:
         """Write this member's research queries for the domain."""
         user_msg = f"## DOMAIN\n\n{domain}\n\n## USER PROFILE\n\n{format_profile(profile)}"
@@ -66,6 +69,8 @@ class GapIdentifier:
                 f"\n\n## ALREADY EXECUTED IN PREVIOUS RUNS (do not repeat; "
                 f"their results are already available)\n\n{listed}"
             )
+        if neighbours:
+            user_msg += NEIGHBOUR_CRAFT_BLOCK.format(neighbours=neighbours)
         result = await self._router.call(
             role=self._role_name,
             messages=[
@@ -89,6 +94,7 @@ class GapIdentifier:
         profile: ProfessionalProfile,
         raw_findings: str,
         memory: str = "",
+        neighbours: str = "",
     ) -> GapExploration:
         """Explore the graph, then conclude gaps from both channels."""
         logger.info("GapIdentifier[%s]: exploring graph", self._role_name)
@@ -107,7 +113,9 @@ class GapIdentifier:
             f"## USER PROFILE\n\n{format_profile(profile)}"
         )
         if memory:
-            user_msg += f"\n\n## PRIOR ANALYSES AND REJECTIONS\n\n{memory}"
+            user_msg += f"\n\n## EXACT PRIOR CONTEXT (same domain)\n\n{memory}"
+        if neighbours:
+            user_msg += NEIGHBOUR_CONCLUDE_BLOCK.format(neighbours=neighbours)
         result = await self._router.call(
             role=self._role_name,
             messages=[
@@ -124,6 +132,7 @@ class GapIdentifier:
                 title=g["title"],
                 description=g["description"],
                 source_model=model_id,
+                evidence=[e for e in g.get("evidence", []) if isinstance(e, str)],
             )
             for g in parsed.get("gaps", [])
         ]
@@ -164,6 +173,7 @@ class GapIdentifier:
                 source_model=model_id,
                 candidate_id=original.candidate_id,
                 source_role=original.source_role,
+                evidence=[e for e in item.get("evidence", []) if isinstance(e, str)],
             )
             for (original, _), item in zip(flagged, items, strict=False)
         ]

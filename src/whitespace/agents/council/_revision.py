@@ -31,10 +31,15 @@ async def request_revisions(
     Returns the model ID that produced the revisions and the raw revised
     items, order-aligned with ``flagged``.
     """
-    items = "\n\n".join(
-        f"{i}. **{candidate.title}**: {candidate.description}\n   Critic feedback: {feedback}"
-        for i, (candidate, feedback) in enumerate(flagged, 1)
-    )
+    item_parts: list[str] = []
+    for i, (candidate, feedback) in enumerate(flagged, 1):
+        entry = f"{i}. **{candidate.title}**: {candidate.description}"
+        evidence = getattr(candidate, "evidence", [])
+        if evidence:
+            entry += f"\n   evidence: {', '.join(evidence)}"
+        entry += f"\n   Critic feedback: {feedback}"
+        item_parts.append(entry)
+    items = "\n\n".join(item_parts)
     user_msg = (
         f"## CANDIDATES TO REVISE\n\n{items}\n\n"
         f"## GRAPH CONTEXT\n\n{graph_context}\n\n"

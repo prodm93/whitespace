@@ -46,6 +46,12 @@ stronger if the landscape shows repeated failed attempts over time, and \
 weaker if recent work is visibly closing it. Weigh how the field has \
 evolved, not just its current snapshot.
 
+Each candidate lists the evidence its author cited. Finding keys such as [F7] refer to \
+entries in the EVIDENCE section; "graph:" references describe the author's own graph \
+exploration, included per analyst below the findings. Verify citations: does the cited \
+evidence actually support the claim, or is the author overclaiming? Uncited or unsupported \
+claims mean weak evidence_strength and are grounds to kill.
+
 Score every candidate 1-10 on: novelty, specificity, evidence_strength, \
 profile_relevance.
 
