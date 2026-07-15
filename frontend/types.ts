@@ -28,12 +28,7 @@ export interface UploadedFile {
   size: number;
 }
 
-export type JobStatusValue =
-  | "pending"
-  | "running"
-  | "awaiting_selection"
-  | "completed"
-  | "failed";
+export type JobStatusValue = "pending" | "running" | "completed" | "failed";
 
 export interface JobResponse {
   job_id: string;
@@ -67,10 +62,6 @@ export interface UnmetNeed {
   critique_notes: string | null;
 }
 
-export interface GapAnalysisResponse {
-  needs: UnmetNeed[];
-}
-
 export interface IdeationProposal {
   title: string;
   problem_statement: string;
@@ -85,8 +76,11 @@ export interface IdeationProposal {
   critique_notes: string | null;
 }
 
-export interface IdeationResponse {
+export interface OrchestrateResult {
+  needs: UnmetNeed[];
   proposals: IdeationProposal[];
+  status: "done" | "awaiting_selection" | "blocked";
+  reason: string | null;
 }
 
 export interface GapRun {
@@ -108,4 +102,4 @@ export interface LatestRunsResponse {
   idea_runs: IdeaRun[];
 }
 
-export type JobType = "ingest" | "gaps" | "ideation";
+export type JobType = "ingest" | "orchestrate";

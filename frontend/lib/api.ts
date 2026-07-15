@@ -63,42 +63,30 @@ export async function triggerIngest(
   return res.json();
 }
 
-export async function pollJob(jobId: string): Promise<JobResult> {
-  const res = await fetch(`${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`);
-  if (!res.ok) {
-    throw new Error(`Poll failed: ${res.status}`);
-  }
-  return res.json();
-}
-
-export async function triggerGapAnalysis(
+export async function orchestrate(
+  intent: string,
+  selectedTitles: string[] = [],
   freshStart = false,
 ): Promise<JobResponse> {
-  const res = await fetch(`${API_BASE}/api/gaps`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fresh_start: freshStart }),
-  });
-  if (!res.ok) {
-    throw new Error(`Gap analysis failed: ${res.status}`);
-  }
-  return res.json();
-}
-
-export async function triggerIdeation(
-  selectedNeeds: string[],
-  freshStart = false,
-): Promise<JobResponse> {
-  const res = await fetch(`${API_BASE}/api/ideate`, {
+  const res = await fetch(`${API_BASE}/api/orchestrate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      selected_needs: selectedNeeds,
+      intent,
+      selected_titles: selectedTitles,
       fresh_start: freshStart,
     }),
   });
   if (!res.ok) {
-    throw new Error(`Ideation failed: ${res.status}`);
+    throw new Error(`Orchestrate failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function pollJob(jobId: string): Promise<JobResult> {
+  const res = await fetch(`${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`);
+  if (!res.ok) {
+    throw new Error(`Poll failed: ${res.status}`);
   }
   return res.json();
 }

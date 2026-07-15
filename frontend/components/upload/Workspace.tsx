@@ -3,20 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useCredentials } from "@/context/CredentialsContext";
 import type {
-  GapAnalysisResponse,
   IdeationProposal,
-  IdeationResponse,
   JobResult,
   LatestRunsResponse,
+  OrchestrateResult,
   UnmetNeed,
   UploadedFile,
 } from "@/types";
-import {
-  getLatestRuns,
-  triggerGapAnalysis,
-  triggerIdeation,
-  triggerIngest,
-} from "@/lib/api";
+import { getLatestRuns, orchestrate, triggerIngest } from "@/lib/api";
 import DropZone, { nextId } from "./DropZone";
 import SearchPanel from "@/components/search/SearchPanel";
 import JobProgress from "@/components/jobs/JobProgress";
@@ -26,10 +20,10 @@ import IdeationResults from "@/components/ideation/IdeationResults";
 type Phase =
   | "input"
   | "ingesting"
-  | "gap-running"
+  | "orchestrating"
   | "gap-results"
-  | "ideation-running"
-  | "ideation-results";
+  | "ideation-results"
+  | "blocked";
 
 function toUploadedFile(file: File): UploadedFile {
   return { id: nextId(), file, name: file.name, size: file.size };
@@ -48,6 +42,7 @@ export default function Workspace() {
   const [jobId, setJobId] = useState("");
   const [needs, setNeeds] = useState<UnmetNeed[]>([]);
   const [proposals, setProposals] = useState<IdeationProposal[]>([]);
+  const [blockedReason, setBlockedReason] = useState("");
   const [ideateSubmitting, setIdeateSubmitting] = useState(false);
   const [latestRuns, setLatestRuns] = useState<LatestRunsResponse | null>(null);
   const [resumeDismissed, setResumeDismissed] = useState(false);
@@ -103,28 +98,47 @@ export default function Workspace() {
   }, [domain, cpcClass, profileFiles, domainFiles, keepFindings]);
 
   const handleIngestComplete = useCallback(async () => {
+    const intent =
+      `Profile and domain documents uploaded. Domain is '${domain}'. ` +
+      `keep_findings is ${keepFindings}. Run gap analysis.`;
     try {
-      const gapJob = await triggerGapAnalysis();
-      setJobId(gapJob.job_id);
-      setPhase("gap-running");
+      const job = await orchestrate(intent);
+      setJobId(job.job_id);
+      setPhase("orchestrating");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start gap analysis.");
+      setError(err instanceof Error ? err.message : "Failed to start analysis.");
       setPhase("input");
     }
-  }, []);
+  }, [domain, keepFindings]);
 
-  const handleGapComplete = useCallback((result: JobResult) => {
-    const data = result.result as GapAnalysisResponse | null;
-    setNeeds(data?.needs ?? []);
-    setPhase("gap-results");
+  const handleOrchestrateComplete = useCallback((result: JobResult) => {
+    const data = result.result as OrchestrateResult | null;
+    if (!data) {
+      setBlockedReason("No result returned from the analysis.");
+      setPhase("blocked");
+      return;
+    }
+    if (data.status === "awaiting_selection") {
+      setNeeds(data.needs);
+      setPhase("gap-results");
+    } else if (data.status === "done" && data.proposals.length > 0) {
+      setProposals(data.proposals);
+      setPhase("ideation-results");
+    } else if (data.status === "blocked") {
+      setBlockedReason(data.reason ?? "Analysis could not complete.");
+      setPhase("blocked");
+    } else {
+      setBlockedReason("Analysis complete with no results. Check the logs.");
+      setPhase("blocked");
+    }
   }, []);
 
   const handleIdeate = useCallback(async (selectedTitles: string[]) => {
     setIdeateSubmitting(true);
     try {
-      const job = await triggerIdeation(selectedTitles);
+      const job = await orchestrate("Run ideation on my selected gaps.", selectedTitles);
       setJobId(job.job_id);
-      setPhase("ideation-running");
+      setPhase("orchestrating");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start ideation.");
     } finally {
@@ -132,41 +146,32 @@ export default function Workspace() {
     }
   }, []);
 
-  const handleIdeationComplete = useCallback((result: JobResult) => {
-    const data = result.result as IdeationResponse | null;
-    setProposals(data?.proposals ?? []);
-    setPhase("ideation-results");
-  }, []);
+  const handleFreshStart = useCallback(async () => {
+    const intent =
+      `Profile and domain documents uploaded. Domain is '${domain}'. ` +
+      `keep_findings is ${keepFindings}. Run gap analysis., ignoring prior memory.`;
+    try {
+      const job = await orchestrate(intent, [], true);
+      setJobId(job.job_id);
+      setPhase("orchestrating");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start fresh.");
+    }
+  }, [domain, keepFindings]);
 
   const handleRetryIngest = useCallback(() => {
     setPhase("input");
     setJobId("");
   }, []);
 
-  const handleRetryGaps = useCallback(async () => {
-    try {
-      const gapJob = await triggerGapAnalysis();
-      setJobId(gapJob.job_id);
-      setPhase("gap-running");
-    } catch {
+  const handleRetryOrchestrate = useCallback(() => {
+    if (needs.length > 0) {
+      setPhase("gap-results");
+    } else {
       setPhase("input");
     }
-  }, []);
-
-  const handleFreshStart = useCallback(async () => {
-    try {
-      const gapJob = await triggerGapAnalysis(true);
-      setJobId(gapJob.job_id);
-      setPhase("gap-running");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start fresh.");
-    }
-  }, []);
-
-  const handleRetryIdeation = useCallback(() => {
-    setPhase("gap-results");
     setJobId("");
-  }, []);
+  }, [needs.length]);
 
   const goToInput = useCallback(() => {
     setPhase("input");
@@ -198,9 +203,12 @@ export default function Workspace() {
   if (phase === "input") {
     backAction = resetCredentials;
     backLabel = "Credentials";
-  } else if (phase === "ideation-running" || phase === "ideation-results") {
+  } else if (phase === "ideation-results") {
     backAction = goToGapResults;
     backLabel = "Gap results";
+  } else if (phase === "blocked") {
+    backAction = goToInput;
+    backLabel = "Back";
   } else {
     backAction = goToInput;
     backLabel = "Back";
@@ -217,13 +225,13 @@ export default function Workspace() {
         onRetry={handleRetryIngest}
       />
     );
-  } else if (phase === "gap-running") {
+  } else if (phase === "orchestrating") {
     content = (
       <JobProgress
         jobId={jobId}
-        jobType="gaps"
-        onComplete={handleGapComplete}
-        onRetry={handleRetryGaps}
+        jobType="orchestrate"
+        onComplete={handleOrchestrateComplete}
+        onRetry={handleRetryOrchestrate}
       />
     );
   } else if (phase === "gap-results") {
@@ -235,17 +243,51 @@ export default function Workspace() {
         submitting={ideateSubmitting}
       />
     );
-  } else if (phase === "ideation-running") {
-    content = (
-      <JobProgress
-        jobId={jobId}
-        jobType="ideation"
-        onComplete={handleIdeationComplete}
-        onRetry={handleRetryIdeation}
-      />
-    );
   } else if (phase === "ideation-results") {
     content = <IdeationResults proposals={proposals} />;
+  } else if (phase === "blocked") {
+    content = (
+      <section className="workspace-blocked">
+        <p className="workspace-blocked__reason">{blockedReason}</p>
+        <button
+          className="workspace-blocked__back"
+          onClick={goToInput}
+          type="button"
+        >
+          Back to start
+        </button>
+        <style jsx>{`
+          .workspace-blocked {
+            padding: 96px var(--margin);
+            max-width: 560px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 28px;
+            text-align: center;
+          }
+          .workspace-blocked__reason {
+            font-size: var(--text-body);
+            color: var(--text-secondary);
+            line-height: 1.6;
+          }
+          .workspace-blocked__back {
+            padding: 12px 36px;
+            font-family: "Inter", sans-serif;
+            font-size: var(--text-body);
+            font-weight: 400;
+            color: var(--text-primary);
+            background: var(--accent);
+            border-radius: var(--radius-md);
+            transition: box-shadow 0.2s var(--ease-out);
+          }
+          .workspace-blocked__back:hover {
+            box-shadow: 0 0 24px var(--accent-glow);
+          }
+        `}</style>
+      </section>
+    );
   } else {
     content = (
       <section className="workspace">

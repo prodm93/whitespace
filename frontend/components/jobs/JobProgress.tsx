@@ -9,23 +9,14 @@ const STATUS_LABELS: Record<JobType, Record<JobStatusValue, string>> = {
   ingest: {
     pending: "Preparing…",
     running: "Building knowledge graph…",
-    awaiting_selection: "Awaiting your selection…",
     completed: "Graph built",
     failed: "Build failed",
   },
-  gaps: {
-    pending: "Preparing council…",
-    running: "Analysing gaps…",
-    awaiting_selection: "Awaiting your selection…",
-    completed: "Analysis complete",
+  orchestrate: {
+    pending: "Preparing…",
+    running: "Analysing…",
+    completed: "Done",
     failed: "Analysis failed",
-  },
-  ideation: {
-    pending: "Preparing council…",
-    running: "Generating ideas…",
-    awaiting_selection: "Awaiting your selection…",
-    completed: "Ideas ready",
-    failed: "Generation failed",
   },
 };
 
@@ -52,7 +43,7 @@ export default function JobProgress({
       const result = await pollJob(jobId);
       setStatus(result.status);
 
-      if (result.status === "completed" || result.status === "awaiting_selection") {
+      if (result.status === "completed") {
         if (intervalRef.current) clearInterval(intervalRef.current);
         onComplete(result);
       } else if (result.status === "failed") {
