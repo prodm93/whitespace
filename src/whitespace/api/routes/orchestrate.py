@@ -22,5 +22,12 @@ async def trigger_orchestration(
     """Submit a natural-language intent; the orchestrator decides what to run."""
     logger.info("Orchestration requested by user=%s", user.user_id)
     queue: JobQueue = request.app.state.queue
-    job_id = await queue.enqueue("orchestrate", {"intent": body.intent})
+    job_id = await queue.enqueue(
+        "orchestrate",
+        {
+            "intent": body.intent,
+            "selected_titles": body.selected_titles,
+            "fresh_start": body.fresh_start,
+        },
+    )
     return JobResponse(job_id=job_id, status=JobStatus.PENDING)
