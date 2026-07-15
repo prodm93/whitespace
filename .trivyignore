@@ -23,9 +23,21 @@ CVE-2026-54371 exp:2026-10-01
 # https://github.com/Cao-Wuhui/CVE-2025-69720
 CVE-2025-69720 exp:2026-10-01
 
-# perl-base 5.40.1-6 — five CVEs, all Debian status "affected" or
+# perl-base 5.40.1-6 — seven CVEs, all Debian status "affected" or
 # "fix_deferred". Our application does not use Perl. Perl is pulled in by
 # the base image for dpkg/apt internals only.
+
+# Silently incorrect regex matches when an alternation exceeds 65535
+# fixed-string branches (trie 16-bit field overflow). Requires compiling
+# a pattern with >64k branches; our application never builds Perl regexes.
+# https://avd.aquasec.com/nvd/cve-2026-13221
+CVE-2026-13221 exp:2026-10-01
+
+# Integer overflow in S_measure_struct; out-of-bounds heap read via
+# crafted pack/unpack template. Requires untrusted input to Perl's
+# pack/unpack; our application never invokes Perl.
+# https://avd.aquasec.com/nvd/cve-2026-57432
+CVE-2026-57432 exp:2026-10-01
 
 # Heap buffer overflow in regex compilation — only triggers on 32-bit
 # builds. Our container is 64-bit.
