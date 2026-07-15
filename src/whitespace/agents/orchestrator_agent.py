@@ -1,4 +1,4 @@
-"""Orchestrator agent — decides which analysis capabilities to run and when.
+"""Orchestrator agent -- decides which analysis capabilities to run and when.
 
 The top of the agentic system: receives the user's intent in natural
 language and drives the pipeline through tools, instead of the API
@@ -9,13 +9,11 @@ ensembles internally; autonomy lives here and in their critics.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 
-from whitespace.agents._orchestrator_actions import AnalysisSession, OrchestratorActions
+from whitespace.agents._orchestrator_actions import OrchestratorActions
+from whitespace.agents._orchestrator_session import AnalysisSession, OrchestratorResult
 from whitespace.agents._tool_loop import run_tool_loop
 from whitespace.models.router import ModelRouter
-from whitespace.schemas.gap import UnmetNeed
-from whitespace.schemas.idea import IdeationProposal
 
 logger = logging.getLogger(__name__)
 
@@ -27,31 +25,38 @@ system. A user states an intent; you decide which capabilities to run, \
 in what order, and when you are done. Always call get_status first.
 
 The system's premise: a knowledge graph connects the user's own \
-experience and background to the researched patent landscape, and the \
+experience and background to the researched patent landscape; the \
 councils mine that connection for unmet needs and invention proposals.
 
+Tools:
+  get_status          -- what the session holds now; call first.
+  extract_profile     -- build a profile from staged profile documents;
+                         required before any analysis if profile is MISSING.
+  stage(domain, ...)  -- record the domain string and keep_findings flag;
+                         required before run_gap_analysis if domain is
+                         'not staged'.
+  run_gap_analysis    -- research the domain, build the graph, run the gap
+                         council. Slow and costly; call at most once per job.
+  run_ideation(...)   -- develop the user's SELECTED gaps into proposals.
+                         Only call with titles visible in get_status under
+                         user-selected gaps. Never select gaps yourself.
+  query_knowledge_graph(question) -- answer a question from the graph;
+                         use for all queries, no new analysis run needed.
+
 Hard rules:
-- Gap selection belongs to the HUMAN. If the intent needs gaps and none \
-exist, run gap analysis and finish by presenting the gap titles for \
-selection. Never choose gaps for the user; run_ideation only with \
-selections the user's intent explicitly contains.
-- run_gap_analysis is slow and costly: run it at most once per request, \
-and only when the intent needs fresh analysis and the session lacks it.
-- Questions about the domain, the graph, or prior results go to \
-query_knowledge_graph, not to a fresh analysis run.
-- If a prerequisite is missing (no profile, no domain), stop and say \
-exactly what the user must provide.
-
-Finish with a short plain-language summary of what you did and what \
-the user should do next.\
+- Gap selection belongs to the HUMAN. If gap analysis is complete, stop.
+  Do not call run_ideation in the same request. run_ideation is only valid
+  on a later request when user-selected gaps are present in get_status.
+  Never choose gaps yourself.
+- You must not call run_ideation unless user-selected gaps in get_status
+  is non-empty; the tool enforces this.
+- run_gap_analysis runs at most once per job; a second call returns the
+  cached result.
+- If a prerequisite is missing, stop and state exactly what is needed.
+  Do not invent workarounds.
+- Blocked outcomes surface as reason text in the result; do not repeat
+  them in a narrative -- return only what the tools produce.\
 """
-
-
-@dataclass
-class OrchestratorResult:
-    narrative: str
-    needs: list[UnmetNeed]
-    proposals: list[IdeationProposal]
 
 
 class OrchestratorAgent:
@@ -72,10 +77,20 @@ class OrchestratorAgent:
             temperature=0.2,
         )
         session = actions.session
+        if session.proposals:
+            status = "done"
+        elif session.blocked_reason:
+            status = "blocked"
+        elif session.needs:
+            status = "awaiting_selection"
+        else:
+            status = "done"
+        logger.info("OrchestratorAgent: finished status=%s narrative=%r", status, narrative[:200])
         return OrchestratorResult(
-            narrative=narrative,
+            status=status,
             needs=session.needs,
             proposals=session.proposals,
+            reason=session.blocked_reason,
         )
 
 

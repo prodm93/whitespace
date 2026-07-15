@@ -109,22 +109,14 @@ def _build_store(config: Config) -> SessionStore:
 def _mount_routes(app: FastAPI) -> None:
     from whitespace.api.routes import (
         credentials,
-        gaps,
-        ideate,
         ingest,
         jobs,
         orchestrate,
-        profile,
-        query,
         runs,
     )
 
     app.include_router(ingest.router, prefix="/api")
     app.include_router(orchestrate.router, prefix="/api")
-    app.include_router(profile.router, prefix="/api")
-    app.include_router(gaps.router, prefix="/api")
-    app.include_router(ideate.router, prefix="/api")
-    app.include_router(query.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
     app.include_router(runs.router, prefix="/api")
     app.include_router(credentials.router, prefix="/api")

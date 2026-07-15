@@ -27,6 +27,7 @@ class AppState:
         self._domain: str = ""
         self._doc_paths: list[str] = []
         self._keep_findings: bool = False
+        self._profile_paths: list[str] = []
         self._lock = asyncio.Lock()
 
     async def get_pipeline(self) -> Pipeline:
@@ -56,6 +57,12 @@ class AppState:
             raise ProfileNotReady("Profile has not been extracted yet")
         return self._profile
 
+    def set_profile_paths(self, paths: list[str]) -> None:
+        self._profile_paths = list(paths)
+
+    def get_profile_paths(self) -> list[str]:
+        return list(self._profile_paths)
+
     def set_pending_ingest(
         self,
         domain: str,
@@ -76,7 +83,6 @@ class AppState:
                 logger.info("AppState: clearing pipeline so next call rebuilds")
                 await self._pipeline.close()
                 self._pipeline = None
-            self._profile = None
 
 
 class ProfileNotReady(RuntimeError):
