@@ -1,31 +1,35 @@
 """SaaS analysis pipeline as a Lambda durable function.
 
-One durable execution covers the whole flow: profile extraction, the
-research-first gap analysis, a zero-compute-cost callback wait while
-the human selects gaps, then ideation. Every stage is a checkpointed
-step; a crash, timeout or redeploy replays past completed steps
-instead of redoing them.
+One durable execution per orchestrate request; no wait_for_callback for
+gap selection. Request 1 runs analysis and ends with awaiting_selection
+(results persisted by save_gap_run). Request 2 rehydrates the latest
+gap run and ideates. Each LLM decision is a named decide-N step
+(replay-compliance rule); side-effectful actions are separate steps;
+session state accumulates from step return values only.
 
-Invocation: SQS → dispatcher (async invoke) → this function. Direct
-SQS event-source mapping is deliberately avoided: it invokes
-synchronously, which caps the execution at one 15-minute slice.
-
-Follow-up (tracked): chunk the graph build per document so the
-gap_analysis step stays well inside a single invocation slice on
-large corpora.
+Invocation: POST /api/orchestrate -> orchestrate_enqueue -> SQS
+orchestrate queue -> durable_dispatcher (async invoke) -> this function.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import Any
 
+from _actions import (
+    _extract_profile_action,
+    _gap_analysis_action,
+    _ideation_action,
+    _query_action,
+    _rehydrate,
+)
+from _loop import _compute_final_result, _compute_status, _decide
 from aws_durable_execution_sdk import DurableContext, durable_execution
 
-if TYPE_CHECKING:
-    from whitespace.config import Config
-    from whitespace.store.base import SessionStore
+from whitespace.agents.orchestrator_agent import _SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -33,126 +37,156 @@ logger.setLevel(logging.INFO)
 AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
 JOBS_TABLE = os.environ.get("JOBS_TABLE", "")
 RESULTS_BUCKET = os.environ.get("RESULTS_BUCKET", "")
-
-_pipeline = None
-
-
-def _get_pipeline():
-    """Cold-start singleton; reused across invocation slices."""
-    global _pipeline
-    if _pipeline is None:
-        from whitespace.config import Config
-        from whitespace.orchestration.pipeline import Pipeline
-
-        config = Config()
-        session_store = _build_session_store(config)
-        _pipeline = Pipeline.from_config(config, session_store=session_store)
-        asyncio.run(_pipeline.initialise())
-    return _pipeline
-
-
-def _build_session_store(config: "Config") -> "SessionStore":
-    if config.sessions_table:
-        from whitespace.store.dynamo_store import DynamoSessionStore
-
-        return DynamoSessionStore(config.sessions_table, config.aws_region)
-
-    logger.warning("SESSIONS_TABLE not set; SaaS session persistence is disabled")
-    from whitespace.store.noop_store import NoopSessionStore
-
-    return NoopSessionStore()
+_MAX_TOOL_CALLS = 12
 
 
 @durable_execution
 def handler(event: dict, context: DurableContext) -> dict:
-    job_id = event["job_id"]
-    payload = event.get("payload", {})
+    job_id: str = event["job_id"]
+    payload: dict[str, Any] = event.get("payload", {})
+    intent: str = payload.get("intent", "")
+    user_selected_titles: list[str] = list(payload.get("selected_titles", []))
+    fresh_start: bool = bool(payload.get("fresh_start", False))
 
     context.step(lambda: _set_status(job_id, "running"), name="status_running")
-    profile = context.step(lambda: _extract_profile(payload), name="extract_profile")
-    needs = context.step(lambda: _gap_analysis(job_id, payload, profile), name="gap_analysis")
-    context.step(
-        lambda: _publish(job_id, "awaiting_selection", {"needs": needs}),
-        name="publish_gaps",
+
+    prior: dict[str, Any] = context.step(
+        lambda: asyncio.run(_rehydrate(payload)),
+        name="rehydrate_session",
     )
 
-    # Zero-cost suspension: the execution sleeps until POST /api/ideate
-    # sends the callback with the user's selections.
-    selection_raw = context.wait_for_callback(
-        lambda token: _store_callback_token(job_id, token),
-        name="await_gap_selection",
-    )
-    selected_titles = json.loads(selection_raw or "{}").get("selected_titles", [])
+    session: dict[str, Any] = {
+        "profile": prior.get("profile"),
+        "profile_paths": list(payload.get("profile_paths", [])),
+        "domain": prior.get("domain", "") or payload.get("domain", ""),
+        "doc_paths": list(payload.get("doc_paths", [])),
+        "keep_findings": bool(payload.get("keep_findings", False)),
+        "needs": list(prior.get("needs", [])),
+        "gap_run_id": prior.get("gap_run_id", ""),
+        "user_selected_titles": user_selected_titles,
+        "proposals": [],
+        "blocked_reason": None,
+    }
+    gap_analysis_ran = False
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": f"## USER INTENT\n\n{intent}"},
+    ]
 
-    proposals = context.step(lambda: _ideation(profile, needs, selected_titles), name="ideation")
-    context.step(
-        lambda: _publish(job_id, "completed", {"needs": needs, "proposals": proposals}),
-        name="publish_results",
-    )
-    return {"job_id": job_id, "status": "completed"}
-
-
-def _extract_profile(payload: dict) -> dict:
-    pipeline = _get_pipeline()
-    paths = payload.get("profile_paths", [])
-    if not paths:
-        raise RuntimeError("No profile documents supplied")
-    profile = asyncio.run(pipeline.extract_profile(paths))
-    return profile.model_dump()
-
-
-def _gap_analysis(job_id: str, payload: dict, profile: dict) -> list[dict]:
-    from whitespace.schemas.profile import ProfessionalProfile
-
-    pipeline = _get_pipeline()
-    needs = asyncio.run(
-        pipeline.analyse_gaps(
-            ProfessionalProfile.model_validate(profile),
-            ", ".join(payload.get("domain_keywords", [])),
-            payload.get("profile_paths", []) + payload.get("domain_paths", []),
-            keep_findings=bool(payload.get("keep_findings", False)),
-            run_id=job_id,
+    for i in range(_MAX_TOOL_CALLS):
+        msgs = list(messages)
+        decision: dict[str, Any] = context.step(
+            (lambda ms=msgs: asyncio.run(_decide(ms))),
+            name=f"decide-{i}",
         )
-    )
-    return [n.model_dump() for n in needs]
+        if decision["type"] == "stop":
+            break
+
+        messages.append(
+            {
+                "role": "assistant",
+                "content": decision.get("content", ""),
+                "tool_calls": decision["tool_calls"],
+            }
+        )
+
+        for call in decision["tool_calls"]:
+            tool_name: str = call["name"]
+            tool_args: dict[str, Any] = call.get("arguments", {})
+            tool_call_id: str = call["id"]
+
+            if tool_name == "get_status":
+                tool_result: str = _compute_status(session)
+
+            elif tool_name == "stage":
+                domain = str(tool_args.get("domain", ""))
+                if not domain:
+                    tool_result = "domain is required."
+                else:
+                    session["domain"] = domain
+                    session["keep_findings"] = bool(tool_args.get("keep_findings", False))
+                    session["blocked_reason"] = None
+                    tool_result = (
+                        f"Staged: domain={domain!r}, keep_findings={session['keep_findings']}."
+                    )
+
+            elif tool_name == "extract_profile":
+                s_snap = dict(session)
+                action: dict[str, Any] = context.step(
+                    (lambda s=s_snap: asyncio.run(_extract_profile_action(s))),
+                    name="extract_profile",
+                )
+                session.update(action["session_updates"])
+                tool_result = action["summary"]
+
+            elif tool_name == "run_gap_analysis":
+                if gap_analysis_ran:
+                    n = session.get("needs", [])
+                    tool_result = (
+                        f"Gap analysis already ran this job. "
+                        f"{len(n)} gaps: {'; '.join(x['title'] for x in n)}"
+                    )
+                else:
+                    s_snap = dict(session)
+                    action = context.step(
+                        (
+                            lambda s=s_snap, jid=job_id, fs=fresh_start: asyncio.run(
+                                _gap_analysis_action(jid, s, fs)
+                            )
+                        ),
+                        name="gap_analysis",
+                    )
+                    gap_analysis_ran = True
+                    session.update(action["session_updates"])
+                    tool_result = action["summary"]
+
+            elif tool_name == "run_ideation":
+                s_snap = dict(session)
+                a_snap = dict(tool_args)
+                action = context.step(
+                    (
+                        lambda s=s_snap, a=a_snap, jid=job_id, fs=fresh_start: asyncio.run(
+                            _ideation_action(jid, s, a, fs)
+                        )
+                    ),
+                    name="ideation",
+                )
+                session.update(action["session_updates"])
+                tool_result = action["summary"]
+
+            elif tool_name == "query_knowledge_graph":
+                q = str(tool_args.get("question", ""))
+                action = context.step(
+                    (lambda question=q: asyncio.run(_query_action(question))),
+                    name=f"query-{i}",
+                )
+                tool_result = action
+
+            else:
+                tool_result = f"Unknown tool: {tool_name}"
+
+            messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": tool_result})
+
+    result = _compute_final_result(session)
+    context.step(lambda: _publish(job_id, result), name="publish_results")
+    return result
 
 
-def _ideation(profile: dict, needs: list[dict], selected_titles: list[str]) -> list[dict]:
-    from whitespace.schemas.gap import UnmetNeed
-    from whitespace.schemas.profile import ProfessionalProfile
-
-    pipeline = _get_pipeline()
-    chosen = [UnmetNeed.model_validate(n) for n in needs if n.get("title") in selected_titles]
-    proposals = asyncio.run(pipeline.ideate(chosen, ProfessionalProfile.model_validate(profile)))
-    return [p.model_dump() for p in proposals]
-
-
-def _store_callback_token(job_id: str, token: str) -> None:
-    """Persist the callback token so the ideate route can resume us."""
+def _publish(job_id: str, result: dict[str, Any]) -> None:
     import boto3
 
-    dynamo = boto3.resource("dynamodb", region_name=AWS_REGION)
-    dynamo.Table(JOBS_TABLE).update_item(
-        Key={"job_id": job_id},
-        UpdateExpression="SET callback_token = :t",
-        ExpressionAttributeValues={":t": token},
-    )
-
-
-def _publish(job_id: str, status: str, result: dict) -> None:
-    import boto3
-
-    s3 = boto3.client("s3", region_name=AWS_REGION)
     key = f"results/{job_id}.json"
-    s3.put_object(Bucket=RESULTS_BUCKET, Key=key, Body=json.dumps(result))
-    _set_status(job_id, status, result_key=key)
+    boto3.client("s3", region_name=AWS_REGION).put_object(
+        Bucket=RESULTS_BUCKET, Key=key, Body=json.dumps(result)
+    )
+    _set_status(job_id, "completed", result_key=key)
 
 
 def _set_status(job_id: str, status: str, result_key: str | None = None) -> None:
     import boto3
 
     dynamo = boto3.resource("dynamodb", region_name=AWS_REGION)
-    item: dict = {"job_id": job_id, "status": status}
+    item: dict[str, Any] = {"job_id": job_id, "status": status}
     if result_key:
         item["result_key"] = result_key
     dynamo.Table(JOBS_TABLE).put_item(Item=item)
