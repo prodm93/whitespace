@@ -35,6 +35,7 @@ frontend/dist/
 
 # Project docs (private)
 CLAUDE.md
+AGENTS.md
 SKILL.md
 BUILD_ORDER.md
 _reference/
