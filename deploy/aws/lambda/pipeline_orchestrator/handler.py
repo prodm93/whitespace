@@ -14,9 +14,7 @@ orchestrate queue -> durable_dispatcher (async invoke) -> this function.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import os
 from typing import Any
 
 from _actions import (
@@ -26,6 +24,7 @@ from _actions import (
     _query_action,
     _rehydrate,
 )
+from _job_state import _increment_run_count, _publish, _set_status
 from _loop import _compute_final_result, _compute_status, _decide
 from aws_durable_execution_sdk import DurableContext, durable_execution
 
@@ -34,9 +33,6 @@ from whitespace.agents.orchestrator_agent import _SYSTEM_PROMPT
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
-JOBS_TABLE = os.environ.get("JOBS_TABLE", "")
-RESULTS_BUCKET = os.environ.get("RESULTS_BUCKET", "")
 _MAX_TOOL_CALLS = 12
 
 
@@ -45,148 +41,144 @@ def handler(event: dict, context: DurableContext) -> dict:
     job_id: str = event["job_id"]
     payload: dict[str, Any] = event.get("payload", {})
     intent: str = payload.get("intent", "")
+    user_id: str = payload.get("user_id", "")
     user_selected_titles: list[str] = list(payload.get("selected_titles", []))
     fresh_start: bool = bool(payload.get("fresh_start", False))
 
-    context.step(lambda: _set_status(job_id, "running"), name="status_running")
+    try:
+        context.step(lambda: _set_status(job_id, "running"), name="status_running")
 
-    prior: dict[str, Any] = context.step(
-        lambda: asyncio.run(_rehydrate(payload)),
-        name="rehydrate_session",
-    )
-
-    session: dict[str, Any] = {
-        "profile": prior.get("profile"),
-        "profile_paths": list(payload.get("profile_paths", [])),
-        "domain": prior.get("domain", "") or payload.get("domain", ""),
-        "doc_paths": list(payload.get("doc_paths", [])),
-        "keep_findings": bool(payload.get("keep_findings", False)),
-        "needs": list(prior.get("needs", [])),
-        "gap_run_id": prior.get("gap_run_id", ""),
-        "user_selected_titles": user_selected_titles,
-        "proposals": [],
-        "blocked_reason": None,
-    }
-    gap_analysis_ran = False
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
-        {"role": "user", "content": f"## USER INTENT\n\n{intent}"},
-    ]
-
-    for i in range(_MAX_TOOL_CALLS):
-        msgs = list(messages)
-        decision: dict[str, Any] = context.step(
-            (lambda ms=msgs: asyncio.run(_decide(ms))),
-            name=f"decide-{i}",
-        )
-        if decision["type"] == "stop":
-            break
-
-        messages.append(
-            {
-                "role": "assistant",
-                "content": decision.get("content", ""),
-                "tool_calls": decision["tool_calls"],
-            }
+        prior: dict[str, Any] = context.step(
+            lambda: asyncio.run(_rehydrate(payload)),
+            name="rehydrate_session",
         )
 
-        for call in decision["tool_calls"]:
-            tool_name: str = call["name"]
-            tool_args: dict[str, Any] = call.get("arguments", {})
-            tool_call_id: str = call["id"]
+        session: dict[str, Any] = {
+            "profile": prior.get("profile"),
+            "profile_paths": list(payload.get("profile_paths", [])),
+            "domain": prior.get("domain", "") or payload.get("domain", ""),
+            "doc_paths": list(payload.get("doc_paths", [])),
+            "keep_findings": bool(payload.get("keep_findings", False)),
+            "needs": list(prior.get("needs", [])),
+            "gap_run_id": prior.get("gap_run_id", ""),
+            "user_selected_titles": user_selected_titles,
+            "proposals": [],
+            "blocked_reason": None,
+        }
+        gap_analysis_ran = False
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": f"## USER INTENT\n\n{intent}"},
+        ]
 
-            if tool_name == "get_status":
-                tool_result: str = _compute_status(session)
+        for i in range(_MAX_TOOL_CALLS):
+            msgs = list(messages)
+            decision: dict[str, Any] = context.step(
+                (lambda ms=msgs: asyncio.run(_decide(ms))),
+                name=f"decide-{i}",
+            )
+            if decision["type"] == "stop":
+                break
 
-            elif tool_name == "stage":
-                domain = str(tool_args.get("domain", ""))
-                if not domain:
-                    tool_result = "domain is required."
-                else:
-                    session["domain"] = domain
-                    session["keep_findings"] = bool(tool_args.get("keep_findings", False))
-                    session["blocked_reason"] = None
-                    tool_result = (
-                        f"Staged: domain={domain!r}, keep_findings={session['keep_findings']}."
-                    )
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": decision.get("content", ""),
+                    "tool_calls": decision["tool_calls"],
+                }
+            )
 
-            elif tool_name == "extract_profile":
-                s_snap = dict(session)
-                action: dict[str, Any] = context.step(
-                    (lambda s=s_snap: asyncio.run(_extract_profile_action(s))),
-                    name="extract_profile",
-                )
-                session.update(action["session_updates"])
-                tool_result = action["summary"]
+            for call in decision["tool_calls"]:
+                tool_name: str = call["name"]
+                tool_args: dict[str, Any] = call.get("arguments", {})
+                tool_call_id: str = call["id"]
 
-            elif tool_name == "run_gap_analysis":
-                if gap_analysis_ran:
-                    n = session.get("needs", [])
-                    tool_result = (
-                        f"Gap analysis already ran this job. "
-                        f"{len(n)} gaps: {'; '.join(x['title'] for x in n)}"
-                    )
-                else:
+                if tool_name == "get_status":
+                    tool_result: str = _compute_status(session)
+
+                elif tool_name == "stage":
+                    domain = str(tool_args.get("domain", ""))
+                    if not domain:
+                        tool_result = "domain is required."
+                    else:
+                        session["domain"] = domain
+                        session["keep_findings"] = bool(tool_args.get("keep_findings", False))
+                        session["blocked_reason"] = None
+                        tool_result = (
+                            f"Staged: domain={domain!r}, keep_findings={session['keep_findings']}."
+                        )
+
+                elif tool_name == "extract_profile":
                     s_snap = dict(session)
-                    action = context.step(
-                        (
-                            lambda s=s_snap, jid=job_id, fs=fresh_start: asyncio.run(
-                                _gap_analysis_action(jid, s, fs)
-                            )
-                        ),
-                        name="gap_analysis",
+                    action: dict[str, Any] = context.step(
+                        (lambda s=s_snap: asyncio.run(_extract_profile_action(s))),
+                        name="extract_profile",
                     )
-                    gap_analysis_ran = True
                     session.update(action["session_updates"])
                     tool_result = action["summary"]
 
-            elif tool_name == "run_ideation":
-                s_snap = dict(session)
-                a_snap = dict(tool_args)
-                action = context.step(
-                    (
-                        lambda s=s_snap, a=a_snap, jid=job_id, fs=fresh_start: asyncio.run(
-                            _ideation_action(jid, s, a, fs)
+                elif tool_name == "run_gap_analysis":
+                    if gap_analysis_ran:
+                        n = session.get("needs", [])
+                        tool_result = (
+                            f"Gap analysis already ran this job. "
+                            f"{len(n)} gaps: {'; '.join(x['title'] for x in n)}"
                         )
-                    ),
-                    name="ideation",
+                    else:
+                        s_snap = dict(session)
+                        action = context.step(
+                            (
+                                lambda s=s_snap, jid=job_id, fs=fresh_start: asyncio.run(
+                                    _gap_analysis_action(jid, s, fs)
+                                )
+                            ),
+                            name="gap_analysis",
+                        )
+                        gap_analysis_ran = True
+                        session.update(action["session_updates"])
+                        if not action["session_updates"].get("blocked_reason") and user_id:
+                            context.step(
+                                (lambda uid=user_id: _increment_run_count(uid)),
+                                name="increment_run_count",
+                            )
+                        tool_result = action["summary"]
+
+                elif tool_name == "run_ideation":
+                    s_snap = dict(session)
+                    a_snap = dict(tool_args)
+                    action = context.step(
+                        (
+                            lambda s=s_snap, a=a_snap, jid=job_id, fs=fresh_start: asyncio.run(
+                                _ideation_action(jid, s, a, fs)
+                            )
+                        ),
+                        name="ideation",
+                    )
+                    session.update(action["session_updates"])
+                    tool_result = action["summary"]
+
+                elif tool_name == "query_knowledge_graph":
+                    q = str(tool_args.get("question", ""))
+                    action = context.step(
+                        (lambda question=q: asyncio.run(_query_action(question))),
+                        name=f"query-{i}",
+                    )
+                    tool_result = action
+
+                else:
+                    tool_result = f"Unknown tool: {tool_name}"
+
+                messages.append(
+                    {"role": "tool", "tool_call_id": tool_call_id, "content": tool_result}
                 )
-                session.update(action["session_updates"])
-                tool_result = action["summary"]
 
-            elif tool_name == "query_knowledge_graph":
-                q = str(tool_args.get("question", ""))
-                action = context.step(
-                    (lambda question=q: asyncio.run(_query_action(question))),
-                    name=f"query-{i}",
-                )
-                tool_result = action
+        result = _compute_final_result(session)
+        context.step(lambda: _publish(job_id, result), name="publish_results")
+        return result
 
-            else:
-                tool_result = f"Unknown tool: {tool_name}"
-
-            messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": tool_result})
-
-    result = _compute_final_result(session)
-    context.step(lambda: _publish(job_id, result), name="publish_results")
-    return result
-
-
-def _publish(job_id: str, result: dict[str, Any]) -> None:
-    import boto3
-
-    key = f"results/{job_id}.json"
-    boto3.client("s3", region_name=AWS_REGION).put_object(
-        Bucket=RESULTS_BUCKET, Key=key, Body=json.dumps(result)
-    )
-    _set_status(job_id, "completed", result_key=key)
-
-
-def _set_status(job_id: str, status: str, result_key: str | None = None) -> None:
-    import boto3
-
-    dynamo = boto3.resource("dynamodb", region_name=AWS_REGION)
-    item: dict[str, Any] = {"job_id": job_id, "status": status}
-    if result_key:
-        item["result_key"] = result_key
-    dynamo.Table(JOBS_TABLE).put_item(Item=item)
+    except Exception as exc:
+        context.step(
+            (lambda e=exc: _set_status(job_id, "failed", error=str(e))),
+            name="status_failed",
+        )
+        raise

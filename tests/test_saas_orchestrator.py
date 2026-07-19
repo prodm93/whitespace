@@ -354,12 +354,9 @@ def test_wait_for_callback_never_called(monkeypatch: Any, pipeline: FakePipeline
         ]
     )
     monkeypatch.setattr(_actions, "_pipeline", pipeline)
-    # boto3 calls inside _set_status/_publish would fail; mock them
-    monkeypatch.setattr(handler, "JOBS_TABLE", "")
-    monkeypatch.setattr(handler, "RESULTS_BUCKET", "")
 
     fake_boto3 = MagicMock()
-    fake_boto3.resource.return_value.Table.return_value.put_item = MagicMock()
+    fake_boto3.resource.return_value.Table.return_value.update_item = MagicMock()
     fake_boto3.client.return_value.put_object = MagicMock()
     monkeypatch.setitem(sys.modules, "boto3", fake_boto3)
 
@@ -407,7 +404,7 @@ def test_request2_rehydrates_needs_without_rerunning_council(
     )
 
     fake_boto3 = MagicMock()
-    fake_boto3.resource.return_value.Table.return_value.put_item = MagicMock()
+    fake_boto3.resource.return_value.Table.return_value.update_item = MagicMock()
     fake_boto3.client.return_value.put_object = MagicMock()
     monkeypatch.setitem(sys.modules, "boto3", fake_boto3)
 
@@ -428,3 +425,136 @@ def test_request2_rehydrates_needs_without_rerunning_council(
     assert pipeline.ideate_calls == 1
     assert result["status"] == "done"
     assert result["proposals"]
+
+
+def test_gap_analysis_success_fires_increment_step(
+    monkeypatch: Any, pipeline: FakePipeline
+) -> None:
+    """A successful gap analysis fires the increment_run_count durable step."""
+    import _actions
+    import handler
+
+    pipeline.router = FakeRouter(
+        [
+            _tc("get_status"),
+            _tc("extract_profile"),
+            _tc("stage", {"domain": "robotics"}),
+            _tc("run_gap_analysis"),
+            _DONE,
+        ]
+    )
+    monkeypatch.setattr(_actions, "_pipeline", pipeline)
+
+    fake_boto3 = MagicMock()
+    fake_boto3.resource.return_value.Table.return_value.update_item = MagicMock()
+    fake_boto3.client.return_value.put_object = MagicMock()
+    monkeypatch.setitem(sys.modules, "boto3", fake_boto3)
+
+    ctx = FakeDurableContext()
+    event = {
+        "job_id": "job-inc",
+        "payload": {
+            "intent": "Run gap analysis",
+            "user_id": "user-123",
+            "profile_paths": ["cv.pdf"],
+            "doc_paths": [],
+            "fresh_start": False,
+            "selected_titles": [],
+        },
+    }
+    handler.handler(event, ctx)
+    assert "increment_run_count" in ctx.step_calls
+
+
+def test_blocked_gap_analysis_does_not_fire_increment(monkeypatch: Any) -> None:
+    """A blocked gap analysis (missing profile) does not fire the increment step."""
+    import _actions
+    import handler
+
+    fake_pipeline = FakePipeline()
+    fake_pipeline.router = FakeRouter(
+        [
+            _tc("run_gap_analysis"),
+            _DONE,
+        ]
+    )
+    monkeypatch.setattr(_actions, "_pipeline", fake_pipeline)
+
+    fake_boto3 = MagicMock()
+    fake_boto3.resource.return_value.Table.return_value.update_item = MagicMock()
+    fake_boto3.client.return_value.put_object = MagicMock()
+    monkeypatch.setitem(sys.modules, "boto3", fake_boto3)
+
+    ctx = FakeDurableContext()
+    event = {
+        "job_id": "job-blocked",
+        "payload": {
+            "intent": "Run gap analysis",
+            "user_id": "user-123",
+            "profile_paths": [],
+            "doc_paths": [],
+            "fresh_start": False,
+            "selected_titles": [],
+        },
+    }
+    handler.handler(event, ctx)
+    assert "increment_run_count" not in ctx.step_calls
+
+
+def test_query_only_does_not_fire_increment(monkeypatch: Any, pipeline: FakePipeline) -> None:
+    """A query-only orchestrate does not fire the increment step."""
+    import _actions
+    import handler
+
+    pipeline.router = FakeRouter(
+        [
+            _tc("get_status"),
+            _tc("query_knowledge_graph", {"question": "What are the gaps?"}),
+            _DONE,
+        ]
+    )
+    monkeypatch.setattr(_actions, "_pipeline", pipeline)
+
+    fake_boto3 = MagicMock()
+    fake_boto3.resource.return_value.Table.return_value.update_item = MagicMock()
+    fake_boto3.client.return_value.put_object = MagicMock()
+    monkeypatch.setitem(sys.modules, "boto3", fake_boto3)
+
+    ctx = FakeDurableContext()
+    event = {
+        "job_id": "job-query",
+        "payload": {
+            "intent": "What are the current gaps?",
+            "user_id": "user-123",
+            "profile_paths": [],
+            "doc_paths": [],
+            "fresh_start": False,
+            "selected_titles": [],
+        },
+    }
+    handler.handler(event, ctx)
+    assert "increment_run_count" not in ctx.step_calls
+
+
+def test_handler_writes_failed_status_on_crash(monkeypatch: Any) -> None:
+    """A crash in the handler body writes status_failed and re-raises."""
+    import _actions
+    import handler
+
+    fake_boto3 = MagicMock()
+    fake_boto3.resource.return_value.Table.return_value.update_item = MagicMock()
+    monkeypatch.setitem(sys.modules, "boto3", fake_boto3)
+
+    async def _crash(_payload: Any) -> Any:
+        raise RuntimeError("simulated crash")
+
+    monkeypatch.setattr(handler, "_rehydrate", _crash)
+    monkeypatch.setattr(_actions, "_ensure_init", AsyncMock())
+
+    ctx = FakeDurableContext()
+    event = {"job_id": "job-crash", "payload": {"intent": "run"}}
+
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        handler.handler(event, ctx)
+
+    assert "status_failed" in ctx.step_calls
