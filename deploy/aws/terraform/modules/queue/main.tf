@@ -1,15 +1,23 @@
+# Single orchestrate queue: the only queued job type after the rework.
+# Ingest is presigned-URL (no queue); gap/ideation are stages inside an
+# orchestrate job, not job types.
+#
+# Deletion candidates (verify producers before removing):
+#   ingest, gap-council, ideation-council queues and their event-source
+#   mappings in modules/lambda/main.tf (lines 225, 232, 302 in the
+#   previous version).
+
 locals {
-  queues = ["ingest", "gap-council", "ideation-council"]
+  queues = ["orchestrate"]
 }
 
-# ---------- Dead-Letter Queues ----------
+# ---------- Dead-Letter Queue ----------
 
 resource "aws_sqs_queue" "dlq" {
   for_each = toset(local.queues)
 
   name                      = "${var.name_prefix}-${each.value}-dlq"
   message_retention_seconds = 1209600 # 14 days
-  # SSE-SQS: free AES-256 encryption at rest, transparent to producers/consumers
   sqs_managed_sse_enabled   = true
 
   tags = merge(var.common_tags, {
@@ -17,15 +25,14 @@ resource "aws_sqs_queue" "dlq" {
   })
 }
 
-# ---------- Main Queues ----------
+# ---------- Main Queue ----------
 
 resource "aws_sqs_queue" "main" {
   for_each = toset(local.queues)
 
   name                       = "${var.name_prefix}-${each.value}"
-  visibility_timeout_seconds = 900   # 15 min — matches max pipeline runtime
+  visibility_timeout_seconds = 900   # 15 min -- matches max dispatcher slice
   message_retention_seconds  = 86400 # 1 day
-  # SSE-SQS: free AES-256 encryption at rest, transparent to producers/consumers
   sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({

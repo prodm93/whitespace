@@ -14,22 +14,32 @@ variable "lambda_build_dir" {
 }
 
 variable "results_bucket_name" {
-  description = "S3 bucket name for search results"
+  description = "S3 bucket name for job results"
   type        = string
 }
 
 variable "results_bucket_arn" {
-  description = "S3 bucket ARN for search results"
+  description = "S3 bucket ARN for job results"
   type        = string
 }
 
 variable "checkpoints_bucket_name" {
-  description = "S3 bucket name for LangGraph checkpoint overflow"
+  description = "S3 bucket name for checkpoint overflow"
   type        = string
 }
 
 variable "checkpoints_bucket_arn" {
-  description = "S3 bucket ARN for LangGraph checkpoint overflow"
+  description = "S3 bucket ARN for checkpoint overflow"
+  type        = string
+}
+
+variable "uploads_bucket_name" {
+  description = "S3 bucket name for user file uploads"
+  type        = string
+}
+
+variable "uploads_bucket_arn" {
+  description = "S3 bucket ARN for user file uploads"
   type        = string
 }
 
@@ -43,8 +53,28 @@ variable "jobs_table_name" {
   type        = string
 }
 
+variable "jobs_table_arn" {
+  description = "DynamoDB jobs table ARN"
+  type        = string
+}
+
 variable "sessions_table_name" {
   description = "DynamoDB session store table name"
+  type        = string
+}
+
+variable "sessions_table_arn" {
+  description = "DynamoDB session store table ARN"
+  type        = string
+}
+
+variable "usage_table_name" {
+  description = "DynamoDB usage tracking table name"
+  type        = string
+}
+
+variable "usage_table_arn" {
+  description = "DynamoDB usage tracking table ARN"
   type        = string
 }
 
@@ -53,18 +83,13 @@ variable "ecr_repository_url" {
   type        = string
 }
 
-variable "ingest_queue_arn" {
-  description = "SQS ingest queue ARN"
+variable "orchestrate_queue_arn" {
+  description = "SQS orchestrate queue ARN"
   type        = string
 }
 
-variable "gap_council_queue_arn" {
-  description = "SQS gap council queue ARN"
-  type        = string
-}
-
-variable "ideation_council_queue_arn" {
-  description = "SQS ideation council queue ARN"
+variable "orchestrate_queue_url" {
+  description = "SQS orchestrate queue URL"
   type        = string
 }
 

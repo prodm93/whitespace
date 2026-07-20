@@ -7,7 +7,7 @@ locals {
   }
 }
 
-# ---------- Monitoring (first — other modules reference log groups) ----------
+# ---------- Monitoring (first -- other modules reference log groups) ----------
 
 module "monitoring" {
   source = "./modules/monitoring"
@@ -17,7 +17,7 @@ module "monitoring" {
   budget_limit_usd          = var.budget_limit_usd
   budget_notification_email = var.budget_notification_email
   sqs_queue_names = [
-    module.queue.ingest_queue_name,
+    module.queue.orchestrate_queue_name,
   ]
 }
 
@@ -69,22 +69,27 @@ module "storage" {
 module "lambda" {
   source = "./modules/lambda"
 
-  name_prefix               = local.name_prefix
-  common_tags               = local.common_tags
-  lambda_build_dir          = "${path.module}/../lambda_build"
-  ecr_repository_url        = module.ecr.repository_url
-  results_bucket_name       = module.storage.results_bucket_name
-  results_bucket_arn        = module.storage.results_bucket_arn
-  checkpoints_bucket_name   = module.storage.checkpoints_bucket_name
-  checkpoints_bucket_arn    = module.storage.checkpoints_bucket_arn
-  checkpoints_table_name    = module.storage.checkpoints_table_name
-  jobs_table_name           = module.storage.jobs_table_name
-  sessions_table_name       = module.storage.sessions_table_name
-  ingest_queue_arn          = module.queue.ingest_queue_arn
-  gap_council_queue_arn     = module.queue.gap_council_queue_arn
-  ideation_council_queue_arn = module.queue.ideation_council_queue_arn
-  log_group_name            = module.monitoring.lambda_log_group_name
-  aws_region                = var.aws_region
+  name_prefix           = local.name_prefix
+  common_tags           = local.common_tags
+  lambda_build_dir      = "${path.module}/../lambda_build"
+  ecr_repository_url    = module.ecr.repository_url
+  results_bucket_name   = module.storage.results_bucket_name
+  results_bucket_arn    = module.storage.results_bucket_arn
+  checkpoints_bucket_name = module.storage.checkpoints_bucket_name
+  checkpoints_bucket_arn  = module.storage.checkpoints_bucket_arn
+  uploads_bucket_name   = module.storage.upload_bucket_name
+  uploads_bucket_arn    = module.storage.upload_bucket_arn
+  checkpoints_table_name = module.storage.checkpoints_table_name
+  jobs_table_name       = module.storage.jobs_table_name
+  jobs_table_arn        = module.storage.jobs_table_arn
+  sessions_table_name   = module.storage.sessions_table_name
+  sessions_table_arn    = module.storage.sessions_table_arn
+  usage_table_name      = module.storage.usage_table_name
+  usage_table_arn       = module.storage.usage_table_arn
+  orchestrate_queue_arn = module.queue.orchestrate_queue_arn
+  orchestrate_queue_url = module.queue.orchestrate_queue_url
+  log_group_name        = module.monitoring.lambda_log_group_name
+  aws_region            = var.aws_region
 }
 
 # ---------- API Gateway ----------
@@ -99,27 +104,28 @@ module "api" {
   clerk_authoriser_lambda_function_arn = module.lambda.authoriser_function_arn
 
   authenticated_routes = [
-    "POST /api/ingest",
-    "POST /api/gaps",
-    "POST /api/ideate",
-    "POST /api/profile",
+    "POST /api/orchestrate",
+    "POST /api/search",
+    "POST /api/upload-url",
+    "GET /api/jobs/{jobId}",
+    "GET /api/runs/latest",
   ]
 
   lambda_invoke_arns = {
     "POST /api/credentials/validate" = module.lambda.credential_validator_invoke_arn
     "POST /api/search"               = module.lambda.search_dispatcher_invoke_arn
-    "POST /api/ingest"               = module.lambda.pipeline_orchestrator_invoke_arn
-    "POST /api/gaps"                 = module.lambda.pipeline_orchestrator_invoke_arn
-    "POST /api/ideate"               = module.lambda.pipeline_orchestrator_invoke_arn
-    "POST /api/profile"              = module.lambda.pipeline_orchestrator_invoke_arn
+    "POST /api/orchestrate"          = module.lambda.orchestrate_enqueue_invoke_arn
+    "POST /api/upload-url"           = module.lambda.upload_url_invoke_arn
+    "GET /api/jobs/{jobId}"          = module.lambda.runs_reader_invoke_arn
+    "GET /api/runs/latest"           = module.lambda.runs_reader_invoke_arn
   }
   lambda_function_arns = {
     "POST /api/credentials/validate" = module.lambda.credential_validator_function_arn
     "POST /api/search"               = module.lambda.search_dispatcher_function_arn
-    "POST /api/ingest"               = module.lambda.pipeline_orchestrator_function_arn
-    "POST /api/gaps"                 = module.lambda.pipeline_orchestrator_function_arn
-    "POST /api/ideate"               = module.lambda.pipeline_orchestrator_function_arn
-    "POST /api/profile"              = module.lambda.pipeline_orchestrator_function_arn
+    "POST /api/orchestrate"          = module.lambda.orchestrate_enqueue_function_arn
+    "POST /api/upload-url"           = module.lambda.upload_url_function_arn
+    "GET /api/jobs/{jobId}"          = module.lambda.runs_reader_function_arn
+    "GET /api/runs/latest"           = module.lambda.runs_reader_function_arn
   }
 }
 

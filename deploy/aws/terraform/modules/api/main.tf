@@ -95,7 +95,7 @@ resource "aws_apigatewayv2_route" "lambda" {
 resource "aws_lambda_permission" "api_lambda" {
   for_each = var.lambda_function_arns
 
-  statement_id  = "AllowAPIGateway-${replace(each.key, " ", "-")}"
+  statement_id  = "AllowAPIGateway-${replace(each.key, "/[^a-zA-Z0-9_-]/", "-")}"
   action        = "lambda:InvokeFunction"
   function_name = each.value
   principal     = "apigateway.amazonaws.com"
