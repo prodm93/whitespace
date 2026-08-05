@@ -2,7 +2,7 @@
 
 Tests the action-step logic directly (without the durable SDK) and
 the end-to-end two-request flow through a FakeDurableContext. The
-aws_durable_execution_sdk is stubbed at import time; the handler
+aws_durable_execution_sdk_python is stubbed at import time; the handler
 directory is added to sys.path so handler.py and its siblings are
 importable.
 
@@ -33,7 +33,14 @@ import pytest
 # Stub the durable execution SDK before importing handler.py
 # ---------------------------------------------------------------------------
 
-_sdk = types.ModuleType("aws_durable_execution_sdk")
+_sdk = types.ModuleType("aws_durable_execution_sdk_python")
+
+
+@dataclass
+class _FakeStepContext:
+    """Minimal stand-in for the SDK's StepContext passed to every callback."""
+
+    name: str = ""
 
 
 @dataclass
@@ -47,7 +54,7 @@ class FakeDurableContext:
         self.step_calls.append(name)
         if name in self._journal:
             return self._journal[name]
-        result = fn()
+        result = fn(_FakeStepContext(name=name))
         self._journal[name] = result
         return result
 
@@ -57,7 +64,7 @@ class FakeDurableContext:
 
 _sdk.DurableContext = FakeDurableContext
 _sdk.durable_execution = lambda fn: fn  # no-op decorator for tests
-sys.modules["aws_durable_execution_sdk"] = _sdk
+sys.modules["aws_durable_execution_sdk_python"] = _sdk
 
 _HANDLER_DIR = str(
     Path(__file__).parent.parent / "deploy" / "aws" / "lambda" / "pipeline_orchestrator"

@@ -1,0 +1,9 @@
+.git
+node_modules
+frontend
+_reference
+_reference_docs
+tests
+.venv
+**/__pycache__
+*.md

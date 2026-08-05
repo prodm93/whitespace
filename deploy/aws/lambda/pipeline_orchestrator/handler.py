@@ -26,7 +26,7 @@ from _actions import (
 )
 from _job_state import _increment_run_count, _publish, _set_status
 from _loop import _compute_final_result, _compute_status, _decide
-from aws_durable_execution_sdk import DurableContext, durable_execution
+from aws_durable_execution_sdk_python import DurableContext, durable_execution
 
 from whitespace.agents.orchestrator_agent import _SYSTEM_PROMPT
 
@@ -46,10 +46,10 @@ def handler(event: dict, context: DurableContext) -> dict:
     fresh_start: bool = bool(payload.get("fresh_start", False))
 
     try:
-        context.step(lambda: _set_status(job_id, "running"), name="status_running")
+        context.step(lambda _: _set_status(job_id, "running"), name="status_running")
 
         prior: dict[str, Any] = context.step(
-            lambda: asyncio.run(_rehydrate(payload)),
+            lambda _: asyncio.run(_rehydrate(payload)),
             name="rehydrate_session",
         )
 
@@ -74,7 +74,7 @@ def handler(event: dict, context: DurableContext) -> dict:
         for i in range(_MAX_TOOL_CALLS):
             msgs = list(messages)
             decision: dict[str, Any] = context.step(
-                (lambda ms=msgs: asyncio.run(_decide(ms))),
+                (lambda _, ms=msgs: asyncio.run(_decide(ms))),
                 name=f"decide-{i}",
             )
             if decision["type"] == "stop":
@@ -111,7 +111,7 @@ def handler(event: dict, context: DurableContext) -> dict:
                 elif tool_name == "extract_profile":
                     s_snap = dict(session)
                     action: dict[str, Any] = context.step(
-                        (lambda s=s_snap: asyncio.run(_extract_profile_action(s))),
+                        (lambda _, s=s_snap: asyncio.run(_extract_profile_action(s))),
                         name="extract_profile",
                     )
                     session.update(action["session_updates"])
@@ -128,7 +128,7 @@ def handler(event: dict, context: DurableContext) -> dict:
                         s_snap = dict(session)
                         action = context.step(
                             (
-                                lambda s=s_snap, jid=job_id, fs=fresh_start: asyncio.run(
+                                lambda _, s=s_snap, jid=job_id, fs=fresh_start: asyncio.run(
                                     _gap_analysis_action(jid, s, fs)
                                 )
                             ),
@@ -138,7 +138,7 @@ def handler(event: dict, context: DurableContext) -> dict:
                         session.update(action["session_updates"])
                         if not action["session_updates"].get("blocked_reason") and user_id:
                             context.step(
-                                (lambda uid=user_id: _increment_run_count(uid)),
+                                (lambda _, uid=user_id: _increment_run_count(uid)),
                                 name="increment_run_count",
                             )
                         tool_result = action["summary"]
@@ -148,7 +148,7 @@ def handler(event: dict, context: DurableContext) -> dict:
                     a_snap = dict(tool_args)
                     action = context.step(
                         (
-                            lambda s=s_snap, a=a_snap, jid=job_id, fs=fresh_start: asyncio.run(
+                            lambda _, s=s_snap, a=a_snap, jid=job_id, fs=fresh_start: asyncio.run(
                                 _ideation_action(jid, s, a, fs)
                             )
                         ),
@@ -160,7 +160,7 @@ def handler(event: dict, context: DurableContext) -> dict:
                 elif tool_name == "query_knowledge_graph":
                     q = str(tool_args.get("question", ""))
                     action = context.step(
-                        (lambda question=q: asyncio.run(_query_action(question))),
+                        (lambda _, question=q: asyncio.run(_query_action(question))),
                         name=f"query-{i}",
                     )
                     tool_result = action
@@ -173,12 +173,12 @@ def handler(event: dict, context: DurableContext) -> dict:
                 )
 
         result = _compute_final_result(session)
-        context.step(lambda: _publish(job_id, result), name="publish_results")
+        context.step(lambda _: _publish(job_id, result), name="publish_results")
         return result
 
     except Exception as exc:
         context.step(
-            (lambda e=exc: _set_status(job_id, "failed", error=str(e))),
+            (lambda _, e=exc: _set_status(job_id, "failed", error=str(e))),
             name="status_failed",
         )
         raise
