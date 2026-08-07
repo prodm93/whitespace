@@ -39,6 +39,12 @@ CVE-2026-13221 exp:2026-10-01
 # https://avd.aquasec.com/nvd/cve-2026-57432
 CVE-2026-57432 exp:2026-10-01
 
+# Storable signed integer overflow deserialising crafted SX_HOOK records.
+# Causes panic/abort, not code execution. Fixed in perl 5.40.1-8 (Debian
+# unstable), not yet in stable. Our application never invokes Perl.
+# https://security-tracker.debian.org/tracker/CVE-2026-57433
+CVE-2026-57433 exp:2026-10-01
+
 # Heap buffer overflow in regex compilation — only triggers on 32-bit
 # builds. Our container is 64-bit.
 # https://security.snyk.io/vuln/SNYK-DEBIAN13-PERL-17037434

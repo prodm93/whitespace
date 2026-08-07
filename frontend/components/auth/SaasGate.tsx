@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import {
-  ClerkProvider,
-  SignInButton,
-  useAuth,
-} from "@clerk/nextjs";
+import { SignInButton, useAuth } from "@clerk/react";
 import { useCredentials } from "@/context/CredentialsContext";
 
 function SaasInner({ onBack }: { onBack: () => void }) {
@@ -140,9 +136,5 @@ export default function SaasGate({ onBack }: SaasGateProps) {
     );
   }
 
-  return (
-    <ClerkProvider publishableKey={publishableKey}>
-      <SaasInner onBack={onBack} />
-    </ClerkProvider>
-  );
+  return <SaasInner onBack={onBack} />;
 }

@@ -4,16 +4,32 @@ import type {
   JobResponse,
   JobResult,
   LatestRunsResponse,
+  StagedUpload,
+  UploadUrlResponse,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+let getAuthToken: (() => Promise<string | null>) | null = null;
+
+export function setAuthTokenGetter(
+  fn: (() => Promise<string | null>) | null,
+): void {
+  getAuthToken = fn;
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  if (!getAuthToken) return {};
+  const token = await getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export async function submitCredentials(
   creds: ByokCredentials,
 ): Promise<CredentialsResult> {
   const res = await fetch(`${API_BASE}/api/credentials`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
     body: JSON.stringify({
       openrouter_api_key: creds.openrouterApiKey,
       neo4j_uri: creds.aura?.neo4jUri ?? "",
@@ -55,6 +71,7 @@ export async function triggerIngest(
 
   const res = await fetch(`${API_BASE}/api/ingest`, {
     method: "POST",
+    headers: { ...(await authHeaders()) },
     body: form,
   });
   if (!res.ok) {
@@ -67,15 +84,23 @@ export async function orchestrate(
   intent: string,
   selectedTitles: string[] = [],
   freshStart = false,
+  staged?: StagedUpload,
 ): Promise<JobResponse> {
+  const body: Record<string, unknown> = {
+    intent,
+    selected_titles: selectedTitles,
+    fresh_start: freshStart,
+  };
+  if (staged) {
+    body.profile_paths = staged.profile_paths;
+    body.doc_paths = staged.doc_paths;
+    body.domain = staged.domain;
+    body.keep_findings = staged.keep_findings;
+  }
   const res = await fetch(`${API_BASE}/api/orchestrate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      intent,
-      selected_titles: selectedTitles,
-      fresh_start: freshStart,
-    }),
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     throw new Error(`Orchestrate failed: ${res.status}`);
@@ -84,7 +109,9 @@ export async function orchestrate(
 }
 
 export async function pollJob(jobId: string): Promise<JobResult> {
-  const res = await fetch(`${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`);
+  const res = await fetch(`${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`, {
+    headers: { ...(await authHeaders()) },
+  });
   if (!res.ok) {
     throw new Error(`Poll failed: ${res.status}`);
   }
@@ -92,9 +119,54 @@ export async function pollJob(jobId: string): Promise<JobResult> {
 }
 
 export async function getLatestRuns(): Promise<LatestRunsResponse> {
-  const res = await fetch(`${API_BASE}/api/runs/latest`);
+  const res = await fetch(`${API_BASE}/api/runs/latest`, {
+    headers: { ...(await authHeaders()) },
+  });
   if (!res.ok) {
     throw new Error(`Fetching latest runs failed: ${res.status}`);
   }
   return res.json();
+}
+
+export async function requestUploadUrl(
+  filename: string,
+  fileSize: number,
+): Promise<UploadUrlResponse> {
+  const res = await fetch(`${API_BASE}/api/upload-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+    body: JSON.stringify({ filename, file_size: fileSize }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let message: string;
+    try {
+      const body = JSON.parse(text);
+      message = body.error ?? text;
+    } catch {
+      message = text;
+    }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+export async function uploadToS3(
+  file: File,
+  resp: UploadUrlResponse,
+): Promise<void> {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(resp.presigned_post.fields)) {
+    form.append(key, value);
+  }
+  form.append("file", file);
+
+  const res = await fetch(resp.presigned_post.url, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(detail);
+  }
 }

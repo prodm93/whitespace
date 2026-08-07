@@ -103,3 +103,15 @@ export interface LatestRunsResponse {
 }
 
 export type JobType = "ingest" | "orchestrate";
+
+export interface StagedUpload {
+  profile_paths: string[];
+  doc_paths: string[];
+  domain: string;
+  keep_findings: boolean;
+}
+
+export interface UploadUrlResponse {
+  s3_key: string;
+  presigned_post: { url: string; fields: Record<string, string> };
+}

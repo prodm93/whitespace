@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/layout/AppShell";
+import ClerkRoot from "@/components/auth/ClerkRoot";
 import { CredentialsProvider } from "@/context/CredentialsContext";
 
 const cormorant = Cormorant_Garamond({
@@ -33,7 +34,9 @@ export default function RootLayout({
     <html lang="en" className={`${cormorant.variable} ${inter.variable}`} style={{ visibility: "hidden" }}>
       <body>
         <CredentialsProvider>
-          <AppShell>{children}</AppShell>
+          <ClerkRoot>
+            <AppShell>{children}</AppShell>
+          </ClerkRoot>
         </CredentialsProvider>
       </body>
     </html>
