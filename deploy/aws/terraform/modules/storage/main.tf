@@ -167,26 +167,3 @@ resource "aws_dynamodb_table" "checkpoints" {
     Name = "${var.name_prefix}-checkpoints"
   })
 }
-
-# ---------- DynamoDB: Sessions ----------
-
-resource "aws_dynamodb_table" "sessions" {
-  name         = "${var.name_prefix}-sessions"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "pk"
-  range_key    = "sk"
-
-  attribute {
-    name = "pk"
-    type = "S"
-  }
-
-  attribute {
-    name = "sk"
-    type = "S"
-  }
-
-  tags = merge(var.common_tags, {
-    Name = "${var.name_prefix}-sessions"
-  })
-}

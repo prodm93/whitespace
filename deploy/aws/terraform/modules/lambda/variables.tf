@@ -78,6 +78,16 @@ variable "usage_table_arn" {
   type        = string
 }
 
+variable "reservations_table_name" {
+  description = "DynamoDB upload reservations table name"
+  type        = string
+}
+
+variable "reservations_table_arn" {
+  description = "DynamoDB upload reservations table ARN"
+  type        = string
+}
+
 variable "ecr_repository_url" {
   description = "ECR repository URL for the pipeline orchestrator image"
   type        = string

@@ -58,6 +58,11 @@ output "upload_url_function_arn" {
   value       = aws_lambda_function.upload_url.arn
 }
 
+output "upload_confirm_function_arn" {
+  description = "Upload confirm Lambda function ARN"
+  value       = aws_lambda_function.upload_confirm.arn
+}
+
 output "runs_reader_invoke_arn" {
   description = "Runs reader Lambda invoke ARN"
   value       = aws_lambda_function.runs_reader.invoke_arn

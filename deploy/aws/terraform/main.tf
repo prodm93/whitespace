@@ -69,27 +69,29 @@ module "storage" {
 module "lambda" {
   source = "./modules/lambda"
 
-  name_prefix           = local.name_prefix
-  common_tags           = local.common_tags
-  lambda_build_dir      = "${path.module}/../lambda_build"
-  ecr_repository_url    = module.ecr.repository_url
-  results_bucket_name   = module.storage.results_bucket_name
-  results_bucket_arn    = module.storage.results_bucket_arn
+  name_prefix             = local.name_prefix
+  common_tags             = local.common_tags
+  lambda_build_dir        = "${path.module}/../lambda_build"
+  ecr_repository_url      = module.ecr.repository_url
+  results_bucket_name     = module.storage.results_bucket_name
+  results_bucket_arn      = module.storage.results_bucket_arn
   checkpoints_bucket_name = module.storage.checkpoints_bucket_name
   checkpoints_bucket_arn  = module.storage.checkpoints_bucket_arn
-  uploads_bucket_name   = module.storage.upload_bucket_name
-  uploads_bucket_arn    = module.storage.upload_bucket_arn
-  checkpoints_table_name = module.storage.checkpoints_table_name
-  jobs_table_name       = module.storage.jobs_table_name
-  jobs_table_arn        = module.storage.jobs_table_arn
-  sessions_table_name   = module.storage.sessions_table_name
-  sessions_table_arn    = module.storage.sessions_table_arn
-  usage_table_name      = module.storage.usage_table_name
-  usage_table_arn       = module.storage.usage_table_arn
-  orchestrate_queue_arn = module.queue.orchestrate_queue_arn
-  orchestrate_queue_url = module.queue.orchestrate_queue_url
-  log_group_name        = module.monitoring.lambda_log_group_name
-  aws_region            = var.aws_region
+  uploads_bucket_name     = module.storage.upload_bucket_name
+  uploads_bucket_arn      = module.storage.upload_bucket_arn
+  checkpoints_table_name  = module.storage.checkpoints_table_name
+  jobs_table_name         = module.storage.jobs_table_name
+  jobs_table_arn          = module.storage.jobs_table_arn
+  sessions_table_name     = module.storage.sessions_table_name
+  sessions_table_arn      = module.storage.sessions_table_arn
+  usage_table_name        = module.storage.usage_table_name
+  usage_table_arn         = module.storage.usage_table_arn
+  reservations_table_name = module.storage.reservations_table_name
+  reservations_table_arn  = module.storage.reservations_table_arn
+  orchestrate_queue_arn   = module.queue.orchestrate_queue_arn
+  orchestrate_queue_url   = module.queue.orchestrate_queue_url
+  log_group_name          = module.monitoring.lambda_log_group_name
+  aws_region              = var.aws_region
 }
 
 # ---------- API Gateway ----------
@@ -127,6 +129,45 @@ module "api" {
     "GET /api/jobs/{jobId}"          = module.lambda.runs_reader_function_arn
     "GET /api/runs/latest"           = module.lambda.runs_reader_function_arn
   }
+}
+
+# ---------- S3 CORS: browser-direct presigned uploads ----------
+
+resource "aws_s3_bucket_cors_configuration" "uploads" {
+  bucket = module.storage.upload_bucket_name
+
+  cors_rule {
+    allowed_methods = ["POST"]
+    allowed_headers = ["*"]
+    allowed_origins = concat(
+      ["http://localhost:3000", "https://${module.cdn.cloudfront_domain}"],
+      var.use_custom_domain ? ["https://${var.domain_name}"] : [],
+    )
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }
+}
+
+# ---------- S3 notification: confirm upload reservations ----------
+
+resource "aws_lambda_permission" "upload_confirm_s3" {
+  statement_id  = "AllowS3Invoke"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambda.upload_confirm_function_arn
+  principal     = "s3.amazonaws.com"
+  source_arn    = module.storage.upload_bucket_arn
+}
+
+resource "aws_s3_bucket_notification" "uploads" {
+  bucket = module.storage.upload_bucket_name
+
+  lambda_function {
+    lambda_function_arn = module.lambda.upload_confirm_function_arn
+    events              = ["s3:ObjectCreated:Post", "s3:LifecycleExpiration:Delete"]
+    filter_prefix       = "uploads/"
+  }
+
+  depends_on = [aws_lambda_permission.upload_confirm_s3]
 }
 
 # ---------- CDN ----------

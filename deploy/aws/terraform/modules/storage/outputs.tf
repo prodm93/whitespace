@@ -58,6 +58,16 @@ output "checkpoints_table_arn" {
   value       = aws_dynamodb_table.checkpoints.arn
 }
 
+output "reservations_table_name" {
+  description = "DynamoDB upload reservations table name"
+  value       = aws_dynamodb_table.reservations.name
+}
+
+output "reservations_table_arn" {
+  description = "DynamoDB upload reservations table ARN"
+  value       = aws_dynamodb_table.reservations.arn
+}
+
 output "sessions_table_name" {
   description = "DynamoDB session store table name"
   value       = aws_dynamodb_table.sessions.name

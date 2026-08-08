@@ -8,7 +8,7 @@ BUILD_DIR="${SCRIPT_DIR}/lambda_build"
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
 
-FUNCTIONS=(authoriser credential_validator search_dispatcher orchestrate_enqueue upload_url durable_dispatcher)
+FUNCTIONS=(authoriser credential_validator search_dispatcher orchestrate_enqueue upload_url upload_confirm durable_dispatcher)
 
 for func in "${FUNCTIONS[@]}"; do
     echo "==> Packaging ${func}..."
