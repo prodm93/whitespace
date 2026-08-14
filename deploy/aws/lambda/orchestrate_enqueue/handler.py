@@ -93,10 +93,12 @@ def handler(event: dict, context: object) -> dict:
 
 
 def _preflight_check(user_id: str, tier: str) -> dict | None:
-    max_runs = _TIER_LIMITS.get(tier, 2)
-    if max_runs == -1:
-        return None
+    if tier not in _TIER_LIMITS:
+        return _response(403, {"error": f"Unknown tier: {tier}"})
     if not USAGE_TABLE:
+        return _response(500, {"error": "Unable to verify account usage. Please try again later."})
+    max_runs = _TIER_LIMITS[tier]
+    if max_runs == -1:
         return None
 
     import boto3

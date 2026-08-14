@@ -141,13 +141,46 @@ def test_enqueue_returns_401_without_user_id(monkeypatch: Any) -> None:
     assert not fb.resource.called
 
 
-def test_preflight_skipped_when_usage_table_empty(monkeypatch: Any) -> None:
+def test_preflight_fails_closed_when_usage_table_empty_free(monkeypatch: Any) -> None:
     fb = MagicMock()
-    fb.resource.return_value.Table.return_value.put_item = MagicMock()
-    fb.client.return_value.send_message = MagicMock()
     monkeypatch.setitem(sys.modules, "boto3", fb)
     monkeypatch.setattr(enqueue_handler, "USAGE_TABLE", "")
 
     result = enqueue_handler.handler(_auth_event("u-5", "free"), None)
-    assert result["statusCode"] == 200
+    assert result["statusCode"] == 500
+    body = json.loads(result["body"])
+    assert body["error"] == "Unable to verify account usage. Please try again later."
     assert not fb.resource.return_value.Table.return_value.get_item.called
+
+
+def test_preflight_fails_closed_when_usage_table_empty_pro(monkeypatch: Any) -> None:
+    fb = MagicMock()
+    monkeypatch.setitem(sys.modules, "boto3", fb)
+    monkeypatch.setattr(enqueue_handler, "USAGE_TABLE", "")
+
+    result = enqueue_handler.handler(_auth_event("u-5b", "pro"), None)
+    assert result["statusCode"] == 500
+    body = json.loads(result["body"])
+    assert body["error"] == "Unable to verify account usage. Please try again later."
+
+
+def test_preflight_fails_closed_when_usage_table_empty_unlimited(monkeypatch: Any) -> None:
+    fb = MagicMock()
+    monkeypatch.setitem(sys.modules, "boto3", fb)
+    monkeypatch.setattr(enqueue_handler, "USAGE_TABLE", "")
+
+    result = enqueue_handler.handler(_auth_event("u-5c", "unlimited"), None)
+    assert result["statusCode"] == 500
+    body = json.loads(result["body"])
+    assert body["error"] == "Unable to verify account usage. Please try again later."
+
+
+def test_preflight_rejects_unknown_tier(monkeypatch: Any) -> None:
+    fb = MagicMock()
+    monkeypatch.setitem(sys.modules, "boto3", fb)
+    monkeypatch.setattr(enqueue_handler, "USAGE_TABLE", "usage-t")
+
+    result = enqueue_handler.handler(_auth_event("u-6", "platinum"), None)
+    assert result["statusCode"] == 403
+    body = json.loads(result["body"])
+    assert body["error"] == "Unknown tier: platinum"
