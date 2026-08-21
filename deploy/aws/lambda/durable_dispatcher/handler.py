@@ -23,10 +23,14 @@ def handler(event: dict, context: object) -> dict:
     client = boto3.client("lambda", region_name=AWS_REGION)
     for record in event.get("Records", []):
         body = json.loads(record["body"])
-        logger.info("Dispatching job_id=%s to durable pipeline", body.get("job_id"))
+        job_id = body.get("job_id", "")
+        if not job_id:
+            raise ValueError(f"Record missing job_id: {record.get('messageId', '?')}")
+        logger.info("Dispatching job_id=%s to durable pipeline", job_id)
         client.invoke(
             FunctionName=PIPELINE_FUNCTION,
             InvocationType="Event",
             Payload=json.dumps(body),
+            DurableExecutionName=job_id,
         )
     return {"statusCode": 200}

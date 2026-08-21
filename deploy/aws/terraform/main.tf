@@ -72,7 +72,7 @@ module "lambda" {
   name_prefix             = local.name_prefix
   common_tags             = local.common_tags
   lambda_build_dir        = "${path.module}/../lambda_build"
-  ecr_repository_url      = module.ecr.repository_url
+  pipeline_image_uri      = var.pipeline_image_uri
   results_bucket_name     = module.storage.results_bucket_name
   results_bucket_arn      = module.storage.results_bucket_arn
   checkpoints_bucket_name = module.storage.checkpoints_bucket_name

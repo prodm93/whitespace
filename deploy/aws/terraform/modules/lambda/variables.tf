@@ -88,9 +88,14 @@ variable "reservations_table_arn" {
   type        = string
 }
 
-variable "ecr_repository_url" {
-  description = "ECR repository URL for the pipeline orchestrator image"
+variable "pipeline_image_uri" {
+  description = "Full ECR image URI with immutable tag for the pipeline orchestrator"
   type        = string
+
+  validation {
+    condition     = !can(regex("@sha256:", var.pipeline_image_uri))
+    error_message = "pipeline_image_uri must use a tagged reference, not a digest."
+  }
 }
 
 variable "orchestrate_queue_arn" {

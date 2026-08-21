@@ -19,7 +19,7 @@ resource "aws_iam_role" "pipeline" {
 
 resource "aws_iam_role_policy_attachment" "pipeline_basic" {
   role       = aws_iam_role.pipeline.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy"
 }
 
 resource "aws_iam_role_policy" "pipeline_permissions" {
@@ -44,6 +44,7 @@ resource "aws_iam_role_policy" "pipeline_permissions" {
         Action = [
           "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem",
           "dynamodb:Query", "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem",
+          "dynamodb:TransactWriteItems",
         ]
         Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.name_prefix}-*"
       },
@@ -88,7 +89,7 @@ resource "aws_iam_role_policy" "dispatcher_invoke" {
       {
         Effect   = "Allow"
         Action   = ["lambda:InvokeFunction"]
-        Resource = aws_lambda_function.pipeline_orchestrator.arn
+        Resource = aws_lambda_alias.pipeline_live.arn
       },
       {
         Effect   = "Allow"
@@ -110,7 +111,8 @@ resource "aws_lambda_function" "pipeline_orchestrator" {
   function_name = "${var.name_prefix}-pipeline-orchestrator"
   role          = aws_iam_role.pipeline.arn
   package_type  = "Image"
-  image_uri     = "${var.ecr_repository_url}:latest"
+  image_uri     = var.pipeline_image_uri
+  publish       = true
   timeout       = 900
   memory_size   = 2048
 
@@ -133,6 +135,12 @@ resource "aws_lambda_function" "pipeline_orchestrator" {
   tags = merge(var.common_tags, { Name = "${var.name_prefix}-pipeline-orchestrator" })
 }
 
+resource "aws_lambda_alias" "pipeline_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.pipeline_orchestrator.function_name
+  function_version = aws_lambda_function.pipeline_orchestrator.version
+}
+
 # ---------- Durable Dispatcher ----------
 
 resource "aws_lambda_function" "durable_dispatcher" {
@@ -140,13 +148,14 @@ resource "aws_lambda_function" "durable_dispatcher" {
   role          = aws_iam_role.dispatcher.arn
   runtime       = "python3.12"
   handler       = "handler.handler"
-  filename      = "${path.module}/../../lambda_build/durable_dispatcher.zip"
+  filename         = "${var.lambda_build_dir}/durable_dispatcher.zip"
+  source_code_hash = filebase64sha256("${var.lambda_build_dir}/durable_dispatcher.zip")
   timeout       = 60
   memory_size   = 128
 
   environment {
     variables = {
-      PIPELINE_FUNCTION = aws_lambda_function.pipeline_orchestrator.function_name
+      PIPELINE_FUNCTION = aws_lambda_alias.pipeline_live.arn
     }
   }
 
