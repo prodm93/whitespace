@@ -69,13 +69,23 @@ resource "aws_iam_role_policy" "enqueue_permissions" {
         Resource = var.orchestrate_queue_arn
       },
       {
-        Effect   = "Allow"
-        Action   = ["dynamodb:PutItem"]
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:TransactWriteItems",
+        ]
         Resource = var.jobs_table_arn
       },
       {
-        Effect   = "Allow"
-        Action   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:TransactWriteItems",
+        ]
         Resource = var.usage_table_arn
       },
     ]

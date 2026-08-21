@@ -24,7 +24,7 @@ for func in "${FUNCTIONS[@]}"; do
             --requirement "${func_dir}/requirements.txt"
     fi
 
-    cp "${func_dir}/handler.py" "${work_dir}/"
+    cp "${func_dir}"/*.py "${work_dir}/"
 
     (cd "${work_dir}" && zip -q -r "${BUILD_DIR}/${func}.zip" .)
 
