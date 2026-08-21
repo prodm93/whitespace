@@ -22,6 +22,10 @@ COPY model_registry.yaml .
 COPY deploy/aws/lambda/pipeline_orchestrator/handler.py \
      deploy/aws/lambda/pipeline_orchestrator/_actions.py \
      deploy/aws/lambda/pipeline_orchestrator/_job_state.py \
+     deploy/aws/lambda/pipeline_orchestrator/_reservation_state.py \
+     deploy/aws/lambda/pipeline_orchestrator/_gap_step.py \
+     deploy/aws/lambda/pipeline_orchestrator/_reservation_ops.py \
+     deploy/aws/lambda/pipeline_orchestrator/_dispatch.py \
      deploy/aws/lambda/pipeline_orchestrator/_loop.py ./
 
 ENV MODE=saas
