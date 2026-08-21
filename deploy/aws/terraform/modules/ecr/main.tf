@@ -1,6 +1,6 @@
 resource "aws_ecr_repository" "backend" {
   name                 = "${var.name_prefix}-backend"
-  # Immutable tags prevent image mutation attacks; CI pushes unique tags per build
+  # Immutable tags prevent image mutation attacks
   image_tag_mutability = "IMMUTABLE"
   force_delete         = false
 
@@ -13,18 +13,19 @@ resource "aws_ecr_repository" "backend" {
   })
 }
 
-resource "aws_ecr_lifecycle_policy" "keep_last_5" {
+resource "aws_ecr_lifecycle_policy" "expire_old" {
   repository = aws_ecr_repository.backend.name
 
   policy = jsonencode({
     rules = [
       {
         rulePriority = 1
-        description  = "Keep last 5 images"
+        description  = "Expire untagged images older than 7 days"
         selection = {
-          tagStatus   = "any"
-          countType   = "imageCountMoreThan"
-          countNumber = 5
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 7
         }
         action = {
           type = "expire"
