@@ -91,6 +91,13 @@ CVE-2026-41992 exp:2026-10-01
 # https://security-tracker.debian.org/tracker/CVE-2026-53615
 CVE-2026-53615 exp:2026-10-01
 
+# OpenSSL 3.5.6: unbounded incoming-channel queue in OpenSSL QUIC servers.
+# The BYOK service runs Uvicorn over HTTP and never creates an OpenSSL QUIC
+# listener, so the affected code path is unreachable. Fixed in OpenSSL 3.5.8;
+# Debian 13 has not published a patched package.
+# https://www.openssl-library.org/news/vulnerabilities-3.6/
+CVE-2026-14456 exp:2026-10-01
+
 
 # ============================================================================
 # Terraform IaC misconfigurations — cost-driven or intentional architecture.
