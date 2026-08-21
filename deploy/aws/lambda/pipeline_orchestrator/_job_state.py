@@ -1,4 +1,4 @@
-"""DynamoDB and S3 job-state writes for the SaaS durable orchestrator."""
+"""DynamoDB job-state reads and writes for the SaaS durable orchestrator."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 _AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
 _JOBS_TABLE = os.environ.get("JOBS_TABLE", "")
 _RESULTS_BUCKET = os.environ.get("RESULTS_BUCKET", "")
-_USAGE_TABLE = os.environ.get("USAGE_TABLE", "")
 
 
 def _set_status(
@@ -22,6 +21,7 @@ def _set_status(
     error: str | None = None,
 ) -> None:
     import boto3
+    from botocore.exceptions import ClientError
 
     names: dict[str, str] = {"#st": "status"}
     vals: dict[str, Any] = {":st": status}
@@ -33,30 +33,19 @@ def _set_status(
         expr += ", #err = :err"
         names["#err"] = "error"
         vals[":err"] = error
-    boto3.resource("dynamodb", region_name=_AWS_REGION).Table(_JOBS_TABLE).update_item(
-        Key={"job_id": job_id},
-        UpdateExpression=expr,
-        ExpressionAttributeNames=names,
-        ExpressionAttributeValues=vals,
-    )
-
-
-def _increment_run_count(user_id: str) -> None:
-    import time
-
-    import boto3
-
-    if not user_id or not _USAGE_TABLE:
-        return
-    now = int(time.time())
-    boto3.resource("dynamodb", region_name=_AWS_REGION).Table(_USAGE_TABLE).update_item(
-        Key={"user_id": user_id},
-        UpdateExpression=(
-            "SET run_count = if_not_exists(run_count, :zero) + :one, "
-            "last_reset_ts = if_not_exists(last_reset_ts, :now)"
-        ),
-        ExpressionAttributeValues={":zero": 0, ":one": 1, ":now": now},
-    )
+    try:
+        boto3.resource("dynamodb", region_name=_AWS_REGION).Table(_JOBS_TABLE).update_item(
+            Key={"job_id": job_id},
+            ConditionExpression="attribute_exists(job_id)",
+            UpdateExpression=expr,
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=vals,
+        )
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning("Job row %s absent; skipping status write", job_id)
+            return
+        raise
 
 
 def _publish(job_id: str, result: dict[str, Any]) -> None:

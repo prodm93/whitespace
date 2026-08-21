@@ -1,10 +1,10 @@
 """Thin gateway lambda: enqueue an orchestrate job and return its id.
 
-Receives POST /api/orchestrate from API Gateway; checks tier limits (coarse
-preflight), writes a pending row to the jobs table, sends the payload to the
-SQS orchestrate queue, and returns {job_id, status: "pending"} immediately.
-The durable_dispatcher then async-invokes the pipeline_orchestrator per the
-established pattern.
+Receives POST /api/orchestrate from API Gateway; reserves a run slot
+(atomic conditional update on the usage table), writes a pending row to
+the jobs table, sends the payload to the SQS orchestrate queue, and
+returns {job_id, status: "pending"} immediately. The durable_dispatcher
+then async-invokes the pipeline_orchestrator per the established pattern.
 
 Direct AWS_PROXY to the durable function is not viable: synchronous
 invocation caps the execution at one <=15-min slice, and the ~29 s
@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -33,8 +32,6 @@ _TIER_LIMITS: dict[str, int] = {
     "pro": -1,
     "unlimited": -1,
 }
-_MONTHLY_RESET_TIERS = {"standard", "pro"}
-_SECONDS_IN_30_DAYS = 30 * 24 * 3600
 
 
 def handler(event: dict, context: object) -> dict:
@@ -54,13 +51,79 @@ def handler(event: dict, context: object) -> dict:
     if not intent:
         return _response(400, {"error": "intent is required"})
 
-    deny = _preflight_check(user_id, tier)
+    job_id = uuid.uuid4().hex
+
+    deny = _preflight_and_reserve(user_id, tier, job_id)
     if deny:
         return deny
 
-    job_id = uuid.uuid4().hex
     logger.info("Enqueuing orchestrate job_id=%s user=%s", job_id, user_id)
 
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    try:
+        message = {
+            "job_id": job_id,
+            "payload": {
+                "intent": intent,
+                "user_id": user_id,
+                "selected_titles": body.get("selected_titles", []),
+                "fresh_start": bool(body.get("fresh_start", False)),
+                "profile_paths": body.get("profile_paths", []),
+                "doc_paths": body.get("doc_paths", []),
+                "domain": body.get("domain", ""),
+                "keep_findings": bool(body.get("keep_findings", False)),
+            },
+        }
+        sqs = boto3.client("sqs", region_name=AWS_REGION)
+        sqs.send_message(QueueUrl=ORCHESTRATE_QUEUE_URL, MessageBody=json.dumps(message))
+    except (ClientError, BotoCoreError):
+        _cleanup_on_sqs_failure(user_id, tier, job_id)
+        raise
+
+    return _response(200, {"job_id": job_id, "status": "pending"})
+
+
+def _preflight_and_reserve(user_id: str, tier: str, job_id: str) -> dict | None:
+    if tier not in _TIER_LIMITS:
+        return _response(403, {"error": f"Unknown tier: {tier}"})
+    if not USAGE_TABLE:
+        return _response(
+            500,
+            {"error": "Unable to verify account usage. Please try again later."},
+        )
+
+    max_runs = _TIER_LIMITS[tier]
+
+    if max_runs == -1:
+        _create_unlimited_job(user_id, job_id)
+        return None
+
+    from _reclaim import reclaim_expired
+    from _reservation import reserve_slot
+    from _reset import ResetExhaustedError, maybe_monthly_reset
+
+    reclaim_expired(user_id, USAGE_TABLE, JOBS_TABLE, AWS_REGION)
+
+    try:
+        maybe_monthly_reset(user_id, tier, USAGE_TABLE, AWS_REGION)
+    except ResetExhaustedError as rse:
+        return _response(500, {"error": str(rse)})
+
+    try:
+        outcome = reserve_slot(user_id, job_id, max_runs, USAGE_TABLE, JOBS_TABLE, AWS_REGION)
+    except RuntimeError:
+        return _response(
+            500,
+            {"error": "Unable to verify account usage. Please try again later."},
+        )
+    if outcome == "cap_reached":
+        return _response(429, {"error": f"Tier '{tier}' limit of {max_runs} runs reached"})
+    return None
+
+
+def _create_unlimited_job(user_id: str, job_id: str) -> None:
     import boto3
 
     dynamo = boto3.resource("dynamodb", region_name=AWS_REGION)
@@ -69,60 +132,27 @@ def handler(event: dict, context: object) -> dict:
             "job_id": job_id,
             "status": "pending",
             "user_id": user_id,
+            "reservation_status": "not_required",
         }
     )
 
-    message = {
-        "job_id": job_id,
-        "payload": {
-            "intent": intent,
-            "user_id": user_id,
-            "selected_titles": body.get("selected_titles", []),
-            "fresh_start": bool(body.get("fresh_start", False)),
-            "profile_paths": body.get("profile_paths", []),
-            "doc_paths": body.get("doc_paths", []),
-            "domain": body.get("domain", ""),
-            "keep_findings": bool(body.get("keep_findings", False)),
-        },
-    }
 
-    sqs = boto3.client("sqs", region_name=AWS_REGION)
-    sqs.send_message(QueueUrl=ORCHESTRATE_QUEUE_URL, MessageBody=json.dumps(message))
+def _cleanup_on_sqs_failure(user_id: str, tier: str, job_id: str) -> None:
+    from botocore.exceptions import BotoCoreError, ClientError
 
-    return _response(200, {"job_id": job_id, "status": "pending"})
+    max_runs = _TIER_LIMITS.get(tier, 0)
+    try:
+        if max_runs == -1:
+            import boto3
 
+            dynamo = boto3.resource("dynamodb", region_name=AWS_REGION)
+            dynamo.Table(JOBS_TABLE).delete_item(Key={"job_id": job_id})
+        else:
+            from _reclaim import rollback_reservation
 
-def _preflight_check(user_id: str, tier: str) -> dict | None:
-    if tier not in _TIER_LIMITS:
-        return _response(403, {"error": f"Unknown tier: {tier}"})
-    if not USAGE_TABLE:
-        return _response(500, {"error": "Unable to verify account usage. Please try again later."})
-    max_runs = _TIER_LIMITS[tier]
-    if max_runs == -1:
-        return None
-
-    import boto3
-
-    table = boto3.resource("dynamodb", region_name=AWS_REGION).Table(USAGE_TABLE)
-    resp = table.get_item(Key={"user_id": user_id})
-    item = resp.get("Item") or {}
-
-    run_count = int(item.get("run_count", 0))
-    last_reset = int(item.get("last_reset_ts", 0))
-
-    if tier in _MONTHLY_RESET_TIERS:
-        now = int(time.time())
-        if now - last_reset > _SECONDS_IN_30_DAYS:
-            run_count = 0
-            table.update_item(
-                Key={"user_id": user_id},
-                UpdateExpression="SET run_count = :zero, last_reset_ts = :now",
-                ExpressionAttributeValues={":zero": 0, ":now": now},
-            )
-
-    if run_count >= max_runs:
-        return _response(429, {"error": f"Tier '{tier}' limit of {max_runs} runs reached"})
-    return None
+            rollback_reservation(user_id, job_id, USAGE_TABLE, JOBS_TABLE, AWS_REGION)
+    except (ClientError, BotoCoreError):
+        logger.error("Cleanup failed for job %s; reclamation will handle it", job_id)
 
 
 def _response(status_code: int, body: dict) -> dict:
