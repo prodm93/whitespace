@@ -9,6 +9,7 @@ import aiosqlite
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
 from whitespace.schemas.research import RawFinding
+from whitespace.store._sqlite_questions import SqliteQuestionStoreMixin
 from whitespace.store._sqlite_rows import (
     _SCHEMA,
     _where,
@@ -21,7 +22,7 @@ from whitespace.store.base import GapRun, IdeaRun, SessionStore
 logger = logging.getLogger(__name__)
 
 
-class SqliteSessionStore(SessionStore):
+class SqliteSessionStore(SqliteQuestionStoreMixin, SessionStore):
     """SQLite-backed session store for BYOK mode."""
 
     def __init__(self, db_path: str | Path) -> None:

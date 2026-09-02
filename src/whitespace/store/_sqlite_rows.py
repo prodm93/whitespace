@@ -35,6 +35,16 @@ CREATE TABLE IF NOT EXISTS discards (
     kind TEXT NOT NULL, title TEXT NOT NULL,
     description TEXT NOT NULL, reason TEXT NOT NULL, domain TEXT
 );
+
+CREATE TABLE IF NOT EXISTS questions (
+    question_id TEXT PRIMARY KEY, created_at TEXT NOT NULL,
+    record_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pending_pauses (
+    pause_id TEXT PRIMARY KEY, created_at TEXT NOT NULL,
+    pause_json TEXT NOT NULL
+);
 """
 
 _DOMAIN_COLUMNS: dict[str, str] = {
