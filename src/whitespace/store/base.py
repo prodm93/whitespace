@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
+from whitespace.schemas.question import QuestionRecord
 from whitespace.schemas.research import RawFinding
 
 
@@ -26,6 +28,15 @@ class IdeaRun(BaseModel):
     )
     timestamp: datetime = Field(..., description="When the run completed")
     proposals: list[IdeationProposal] = Field(default_factory=list)
+
+
+class PendingPause(BaseModel):
+    pause_id: str
+    job_id: str
+    thread_id: str
+    stage: Literal["gap", "ideation"]
+    questions: list[QuestionRecord]
+    created_at: datetime
 
 
 class SessionStore(ABC):
@@ -77,3 +88,21 @@ class SessionStore(ABC):
     async def list_discards(self, kind: str | None = None) -> list[dict[str, str]]:
         """Return discarded candidates ({title, description, reason, kind, domain})."""
         return []
+
+    async def save_question_records(self, records: list[QuestionRecord]) -> None:
+        return None
+
+    async def list_question_records(self, limit: int | None = None) -> list[QuestionRecord]:
+        return []
+
+    async def update_question_record(self, question_id: str, **fields: Any) -> None:
+        return None
+
+    async def save_pending_pause(self, pause: PendingPause) -> None:
+        return None
+
+    async def get_pending_pause(self) -> PendingPause | None:
+        return None
+
+    async def delete_pending_pause(self, pause_id: str) -> None:
+        return None
