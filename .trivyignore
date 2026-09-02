@@ -79,6 +79,21 @@ CVE-2026-9538 exp:2026-10-01
 # https://cert.pl/en/posts/2026/06/CVE-2026-41991/
 CVE-2026-41992 exp:2026-10-01
 
+# libsqlite3-0 3.46.1-7+deb13u1: heap out-of-bounds write in
+# FTS5 page processing. Upstream documents both CVEs as the same bug.
+# Exploitation requires attacker-controlled SQL, FTS5 enabled and defensive
+# mode disabled. WhiteSpace accepts no SQLite uploads or user-supplied SQL;
+# its session store creates ordinary tables and executes no FTS5 MATCH query.
+# Debian 13 marks both no-dsa (minor) and has no stable fix; fixed upstream
+# in SQLite 3.53.2 and in Debian unstable 3.53.2-1.
+# https://www.sqlite.org/cves.html
+# https://security-tracker.debian.org/tracker/CVE-2026-11822
+CVE-2026-11822 exp:2026-10-01
+
+# Same FTS5 heap-overflow bug and unreachable execution path as above.
+# https://security-tracker.debian.org/tracker/CVE-2026-11824
+CVE-2026-11824 exp:2026-10-01
+
 # libblkid1/bsdutils/util-linux family 2.41-5: integer overflow in the DOS
 # partition table parser (parse_dos_extended in dos.c). A crafted lba_start
 # wraps a uint32_t addition and registers a fake partition at sector 0.
