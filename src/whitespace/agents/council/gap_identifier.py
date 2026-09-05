@@ -10,6 +10,7 @@ from whitespace.agents._tool_loop import run_tool_loop
 from whitespace.agents.council._gap_prompts import (
     CONCLUDE_PROMPT,
     EXPLORE_PROMPT,
+    GAP_REVISIONS_FORMAT,
     GAPS_FORMAT,
     NEIGHBOUR_CONCLUDE_BLOCK,
     NEIGHBOUR_CRAFT_BLOCK,
@@ -17,6 +18,7 @@ from whitespace.agents.council._gap_prompts import (
     REVISION_PROMPT,
 )
 from whitespace.agents.council._helpers import format_profile
+from whitespace.agents.council._question_proposals import parse_proposed_questions
 from whitespace.agents.council._revision import request_revisions
 from whitespace.config import Config
 from whitespace.models.router import ModelRouter
@@ -33,7 +35,7 @@ class GapIdentifier:
     """One council member: crafts research queries, then analyses the
     two evidence channels (raw findings + its own graph traversal).
 
-    Runs independently — the council fans out to multiple instances on
+    Runs independently. The council fans out to multiple instances on
     different models. Each model writes different queries and explores
     the graph differently, which is the diversity the council wants.
     """
@@ -142,7 +144,13 @@ class GapIdentifier:
             len(gaps),
             model_id,
         )
-        return GapExploration(gaps=gaps, findings=exploration)
+        return GapExploration(
+            gaps=gaps,
+            findings=exploration,
+            proposed_questions=parse_proposed_questions(
+                parsed.get("questions_for_user"), self._role_name
+            ),
+        )
 
     async def revise(
         self,
@@ -160,7 +168,7 @@ class GapIdentifier:
             self._router,
             role=self._role_name,
             system_prompt=REVISION_PROMPT,
-            response_format=GAPS_FORMAT,
+            response_format=GAP_REVISIONS_FORMAT,
             response_key="gaps",
             flagged=flagged,
             graph_context=graph_context,

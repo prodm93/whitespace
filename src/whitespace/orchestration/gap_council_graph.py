@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
 
+from whitespace.agents.council._question_proposals import resolve_question_candidate_ids
 from whitespace.agents.council.gap_critic import GapCritic
 from whitespace.agents.council.gap_identifier import GapIdentifier
 from whitespace.agents.council.gap_synthesiser import GapSynthesiser
@@ -135,9 +136,14 @@ class GapCouncilGraph:
         pool, flags = await self._research.gate_pool(
             pool, state["run_memory"].prior_texts, state["run_id"], "gap", state["domain"]
         )
+        proposals = resolve_question_candidate_ids(
+            [question for _, output in batches for question in output.proposed_questions],
+            pool,
+        )
         logger.info("GapCouncilGraph: %d candidates after gate", len(pool))
         return {
             "candidates": pool,
+            "proposed_questions": proposals,
             "gate_flags": flags,
             "findings_by_role": {role: out.findings for role, out in batches},
             "report": None,

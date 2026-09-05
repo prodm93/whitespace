@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from whitespace.schemas.question import ProposedQuestion
+
 
 class CandidateGap(BaseModel):
     title: str = Field(..., description="Short name for the candidate gap")
@@ -21,7 +23,7 @@ class CandidateGap(BaseModel):
 
 class GapExploration(BaseModel):
     """One identifier's structured output: its candidates plus the
-    evidence trail that produced them. Nothing is discarded — findings
+    evidence trail that produced them. Nothing is discarded; findings
     feed revision and the final write-up."""
 
     gaps: list[CandidateGap] = Field(default_factory=list)
@@ -29,6 +31,7 @@ class GapExploration(BaseModel):
         default="",
         description="Transcript of graph and prior-art searches behind the gaps",
     )
+    proposed_questions: list[ProposedQuestion] = Field(default_factory=list)
 
 
 class UnmetNeed(BaseModel):
