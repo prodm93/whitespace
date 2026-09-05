@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from whitespace.schemas.question import ProposedQuestion
+
 
 class CandidateIdea(BaseModel):
     title: str = Field(..., description="Short name for the candidate idea")
@@ -13,6 +15,11 @@ class CandidateIdea(BaseModel):
     source_role: str = Field(
         default="", description="Registry role of the ideator that produced this idea"
     )
+
+
+class IdeaExploration(BaseModel):
+    ideas: list[CandidateIdea] = Field(default_factory=list)
+    proposed_questions: list[ProposedQuestion] = Field(default_factory=list)
 
 
 class IdeationProposal(BaseModel):

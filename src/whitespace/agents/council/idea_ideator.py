@@ -7,17 +7,19 @@ import logging
 
 from whitespace.agents.council._helpers import format_needs, format_profile
 from whitespace.agents.council._idea_prompts import (
+    IDEA_REVISIONS_FORMAT,
     IDEAS_FORMAT,
     REVISION_PROMPT,
     SYSTEM_PROMPT,
 )
 from whitespace.agents.council._novelty import run_novelty_filter
+from whitespace.agents.council._question_proposals import parse_proposed_questions
 from whitespace.agents.council._revision import request_revisions
 from whitespace.agents.council.prior_art_agent import PriorArtAgent
 from whitespace.config import Config
 from whitespace.models.router import ModelRouter
 from whitespace.schemas.gap import UnmetNeed
-from whitespace.schemas.idea import CandidateIdea
+from whitespace.schemas.idea import CandidateIdea, IdeaExploration
 from whitespace.schemas.profile import ProfessionalProfile
 
 logger = logging.getLogger(__name__)
@@ -50,7 +52,7 @@ class IdeaIdeator:
         selected_needs: list[UnmetNeed],
         graph_context: str,
         profile: ProfessionalProfile,
-    ) -> list[CandidateIdea]:
+    ) -> IdeaExploration:
         logger.info(
             "IdeaIdeator[%s]: ideating on %d needs",
             self._role_name,
@@ -86,7 +88,12 @@ class IdeaIdeator:
             len(ideas),
             model_id,
         )
-        return ideas
+        return IdeaExploration(
+            ideas=ideas,
+            proposed_questions=parse_proposed_questions(
+                parsed.get("questions_for_user"), self._role_name
+            ),
+        )
 
     async def novelty_filter(
         self,
@@ -112,7 +119,7 @@ class IdeaIdeator:
             self._router,
             role=self._role_name,
             system_prompt=REVISION_PROMPT,
-            response_format=IDEAS_FORMAT,
+            response_format=IDEA_REVISIONS_FORMAT,
             response_key="ideas",
             flagged=flagged,
             graph_context=graph_context,

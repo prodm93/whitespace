@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, TypedDict
+from typing import Any
 
 from langgraph.graph import END, StateGraph
 
+from whitespace.agents.council._question_proposals import resolve_question_candidate_ids
 from whitespace.agents.council.idea_critic import IdeaCritic
 from whitespace.agents.council.idea_ideator import IdeaIdeator
 from whitespace.agents.council.idea_synthesiser import IdeaSynthesiser
@@ -18,23 +19,12 @@ from whitespace.orchestration._council_common import (
     run_targeted_revision,
     should_revise,
 )
-from whitespace.schemas.critique import CriticReport
+from whitespace.orchestration._ideation_council_state import IdeationCouncilState
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import CandidateIdea, IdeationProposal
 from whitespace.schemas.profile import ProfessionalProfile
 
 logger = logging.getLogger(__name__)
-
-
-class IdeationCouncilState(TypedDict, total=False):
-    selected_needs: list[UnmetNeed]
-    profile: ProfessionalProfile
-    graph_context: str
-    candidates: list[CandidateIdea]
-    report: CriticReport | None
-    revision_round: int
-    final_proposals: list[IdeationProposal]
-    discards: list[dict[str, str]]
 
 
 class IdeationCouncilGraph:
@@ -107,14 +97,22 @@ class IdeationCouncilGraph:
             for role in roles
         ]
         batches = await collect_batches(roles, tasks, "IdeationCouncilGraph")
-        pool = assign_candidate_ids(batches)
+        pool = assign_candidate_ids([(role, output.ideas) for role, output in batches])
         logger.info(
             "IdeationCouncilGraph: %d/%d ideators succeeded (%d candidates)",
             len(batches),
             len(roles),
             len(pool),
         )
-        return {"candidates": pool, "report": None, "revision_round": 0}
+        return {
+            "candidates": pool,
+            "proposed_questions": resolve_question_candidate_ids(
+                [question for _, output in batches for question in output.proposed_questions],
+                pool,
+            ),
+            "report": None,
+            "revision_round": 0,
+        }
 
     async def _run_novelty(self, state: IdeationCouncilState) -> dict[str, Any]:
         """Each ideator novelty-checks its own ideas and prunes duplicates."""
@@ -141,7 +139,10 @@ class IdeationCouncilGraph:
             len(survivors),
             len(state["candidates"]),
         )
-        return {"candidates": survivors, "discards": discards}
+        return {
+            "candidates": survivors,
+            "discards": discards,
+        }
 
     def _route_after_critic(self, state: IdeationCouncilState) -> str:
         """Conditional edge driven by the critic's own verdicts."""
