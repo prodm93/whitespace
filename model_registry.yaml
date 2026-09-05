@@ -164,6 +164,32 @@ gap_synthesiser:
         input_per_1m: 0.80
         output_per_1m: 3.20
 
+# Provisional placeholder for the adaptive question gate. Revisit this entire
+# chain during the final registry allocation alongside every other agent role.
+question_gate:
+  models:
+    - model_id: "deepseek.deepseek-v3-2-v1:0"
+      provider: deepseek
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.50
+        output_per_1m: 2.00
+    - model_id: "mistral.mistral-large-3-675b-instruct"
+      provider: mistral
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.50
+        output_per_1m: 1.50
+    - model_id: "amazon.nova-pro-v1:0"
+      provider: amazon
+      timeout_seconds: 120
+      retries: 2
+      pricing:
+        input_per_1m: 0.80
+        output_per_1m: 3.20
+
 idea_ideator_1:
   models:
     - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
