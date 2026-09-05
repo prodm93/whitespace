@@ -2,14 +2,14 @@
 # None of these packages are used by our application. Revisit when Debian
 # releases fixes or when upgrading the base image.
 
-# libacl1 2.3.2-2 — symlink traversal in ACL path functions.
+# libacl1 2.3.2-2: symlink traversal in ACL path functions.
 # Requires local attacker controlling a path component traversed by a
 # privileged caller. Our container never invokes ACL utilities on
 # user-controlled paths. Upstream fix: acl >= 2.4.0.
 # https://thewindowsupdate.com/2026/06/30/cve-2026-54369-acl-2-4-0-symlink-traversal-privilege-escalation-via-libacl-functions/
 CVE-2026-54369 exp:2026-10-01
 
-# libattr1 1:2.5.2-3 — symlink traversal in getfattr/setfattr.
+# libattr1 1:2.5.2-3: symlink traversal in getfattr/setfattr.
 # Same class as CVE-2026-54369. Our container never calls getfattr or
 # setfattr. Upstream fix: attr >= 2.6.0.
 # https://thewindowsupdate.com/2026/06/30/cve-2026-54371-attr-2-6-0-symlink-traversal-privilege-escalation-via-getfattr-setfattr/
@@ -23,7 +23,7 @@ CVE-2026-54371 exp:2026-10-01
 # https://github.com/Cao-Wuhui/CVE-2025-69720
 CVE-2025-69720 exp:2026-10-01
 
-# perl-base 5.40.1-6 — seven CVEs, all Debian status "affected" or
+# perl-base 5.40.1-6: seven CVEs, all Debian status "affected" or
 # "fix_deferred". Our application does not use Perl. Perl is pulled in by
 # the base image for dpkg/apt internals only.
 
@@ -45,7 +45,7 @@ CVE-2026-57432 exp:2026-10-01
 # https://security-tracker.debian.org/tracker/CVE-2026-57433
 CVE-2026-57433 exp:2026-10-01
 
-# Heap buffer overflow in regex compilation — only triggers on 32-bit
+# Heap buffer overflow in regex compilation. This only triggers on 32-bit
 # builds. Our container is 64-bit.
 # https://security.snyk.io/vuln/SNYK-DEBIAN13-PERL-17037434
 CVE-2026-8376 exp:2026-10-01
@@ -106,6 +106,50 @@ CVE-2026-11824 exp:2026-10-01
 # https://security-tracker.debian.org/tracker/CVE-2026-53615
 CVE-2026-53615 exp:2026-10-01
 
+# util-linux family 2.41.5-0+deb13u1: four local privilege-escalation
+# paths in mount(8), libmount and nsenter. The image does not create or
+# admit an unprivileged local user, define user-mountable /etc/fstab entries,
+# invoke mount helpers or use nsenter to manage host cgroups. Debian 13 marks
+# all four no-dsa (minor) and has no stable fix. Fixed upstream and in Debian
+# unstable with util-linux 2.42.3-1.
+
+# Privileged X-mount post-hooks can run after an external mount helper fails.
+# Exploitation requires a local user-authorised fstab entry with X-mount.idmap
+# or X-mount.owner/group/mode, none of which exist in this container.
+# https://security-tracker.debian.org/tracker/CVE-2026-76642
+# https://github.com/util-linux/util-linux/security/advisories/GHSA-m25x-3hj9-m26f
+CVE-2026-76642 exp:2026-10-01
+
+# nsenter --join-cgroup can leave a root-opened cgroup.procs descriptor with
+# an attacker-controlled target. This container never invokes nsenter and
+# does not grant local users control of cgroup namespace targets.
+# https://security-tracker.debian.org/tracker/CVE-2026-78408
+# https://github.com/util-linux/util-linux/security/advisories/GHSA-55fx-f4gg-cfhj
+CVE-2026-78408 exp:2026-10-01
+
+# X-mount.subdir can traverse an intermediate symlink outside a detached
+# mount tree. Exploitation requires a local user-authorised fstab entry and
+# a user-controlled path. This container has neither.
+# https://security-tracker.debian.org/tracker/CVE-2026-78409
+# https://github.com/util-linux/util-linux/security/advisories/GHSA-8f2p-47x3-43mv
+CVE-2026-78409 exp:2026-10-01
+
+# Restricted bind mounts can resolve a replaced source path before privileged
+# ownership or mode changes. Exploitation requires a local user-authorised
+# fstab entry with a writable source ancestor. This container has none.
+# https://security-tracker.debian.org/tracker/CVE-2026-78410
+# https://github.com/util-linux/util-linux/security/advisories/GHSA-rh77-686x-2f2m
+CVE-2026-78410 exp:2026-10-01
+
+# libsystemd0/libudev1 257.13-1~deb13u1: Trivy maps a systemd-homed local
+# privilege-escalation advisory to these libraries. The slim container does
+# not include or run systemd-homed and has no homed-managed local users, so
+# the vulnerable account-update path is absent. Debian 13 marks this no-dsa
+# (minor) and has no stable fix; fixed upstream in systemd 258.10 and 261.2.
+# https://security-tracker.debian.org/tracker/CVE-2026-16742
+# https://github.com/systemd/systemd/security/advisories/GHSA-jm29-p7hh-vjhv
+CVE-2026-16742 exp:2026-10-01
+
 # OpenSSL 3.5.6: unbounded incoming-channel queue in OpenSSL QUIC servers.
 # The BYOK service runs Uvicorn over HTTP and never creates an OpenSSL QUIC
 # listener, so the affected code path is unreachable. Fixed in OpenSSL 3.5.8;
@@ -115,7 +159,7 @@ CVE-2026-14456 exp:2026-10-01
 
 
 # ============================================================================
-# Terraform IaC misconfigurations — cost-driven or intentional architecture.
+# Terraform IaC misconfigurations: cost-driven or intentional architecture.
 # TODO: Address these when scaling to production with real users/traffic.
 # ============================================================================
 
