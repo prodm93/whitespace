@@ -1,4 +1,4 @@
-"""Context agent — formulates LLM-ready context from the knowledge graph.
+"""Context agent that formulates LLM-ready context from the knowledge graph.
 
 Edge-first retrieval: Graphiti's hybrid search ranks fact edges by
 relevance (BM25 + cosine, fused via RRF), then a second pass reranks
@@ -9,6 +9,7 @@ can ground phrasing back to the corpus.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from whitespace.agents._context_helpers import (
@@ -147,15 +148,16 @@ class ContextAgent:
             return EMPTY_CONTEXT
 
         endpoint_uuids = list({e.source_id for e in edges} | {e.target_id for e in edges})
-        name_by_uuid = await self._graph_tools.nodes.fetch_node_names(
-            uuids=endpoint_uuids,
-            group_id=group_id,
-        )
-
         episode_order = collect_episode_uuids(edges, max_chunks=_MAX_CHUNKS)
-        chunks = await self._graph_tools.episodes.fetch_episode_chunks(
-            episode_uuids=episode_order,
-            group_id=group_id,
+        name_by_uuid, chunks = await asyncio.gather(
+            self._graph_tools.nodes.fetch_node_names(
+                uuids=endpoint_uuids,
+                group_id=group_id,
+            ),
+            self._graph_tools.episodes.fetch_episode_chunks(
+                episode_uuids=episode_order,
+                group_id=group_id,
+            ),
         )
 
         rendered = render(edges, name_by_uuid, episode_order, chunks)
