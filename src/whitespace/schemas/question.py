@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ProposedQuestion(BaseModel):
@@ -13,6 +13,7 @@ class ProposedQuestion(BaseModel):
     hypothesis: str
     asker_role: str
     related_candidate_id: str = ""
+    related_candidate_title: str = Field(default="", exclude=True)
 
 
 class UserAnswer(BaseModel):
@@ -30,6 +31,7 @@ class QuestionRecord(BaseModel):
     hypothesis: str
     rationale: str
     asker_role: str
+    related_candidate_id: str = ""
     asked: bool
     status: Literal["pending", "answered", "skipped", "expired"] = "pending"
     answer: str = ""
@@ -39,3 +41,9 @@ class QuestionRecord(BaseModel):
     survival_bonus: float = 0.0
     selection_bonus: float = 0.0
     rerun_penalty: float = 0.0
+
+
+class GateDecision(BaseModel):
+    ask: bool
+    questions: list[QuestionRecord]
+    reasoning: str
