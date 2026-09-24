@@ -48,23 +48,29 @@ class GapCouncilGraph:
         self._critic = critic
         self._synthesiser = synthesiser
         self._research = research_stage
-        self._compiled = self._build()
+        self._first_half = self._build_first_half()
+        self._second_half = self._build_second_half()
 
-    def _build(self) -> Any:
+    def _build_first_half(self) -> Any:
+        builder = StateGraph(GapCouncilState)
+        builder.add_node("craft_queries", self._run_craft_queries)
+        builder.add_node("research", self._run_research)
+        builder.add_node("fan_out_identifiers", self._run_identifiers)
+        builder.set_entry_point("craft_queries")
+        builder.add_edge("craft_queries", "research")
+        builder.add_edge("research", "fan_out_identifiers")
+        builder.add_edge("fan_out_identifiers", END)
+        return builder.compile()
+
+    def _build_second_half(self) -> Any:
         builder = StateGraph(GapCouncilState)
         for name, fn in [
-            ("craft_queries", self._run_craft_queries),
-            ("research", self._run_research),
-            ("fan_out_identifiers", self._run_identifiers),
             ("critic", self._run_critic),
             ("revise", self._run_revision),
             ("synthesiser", self._run_synthesiser),
         ]:
             builder.add_node(name, fn)
-        builder.set_entry_point("craft_queries")
-        builder.add_edge("craft_queries", "research")
-        builder.add_edge("research", "fan_out_identifiers")
-        builder.add_edge("fan_out_identifiers", "critic")
+        builder.set_entry_point("critic")
         builder.add_conditional_edges(
             "critic",
             self._route_after_critic,
@@ -92,7 +98,16 @@ class GapCouncilGraph:
             "run_id": run_id or str(uuid.uuid4()),
             "run_memory": run_memory or RunMemory(),
         }
-        final_state = await self._compiled.ainvoke(initial_state)
+        mid_state = await self.run_first_half(initial_state)
+        return await self.run_second_half(mid_state)
+
+    async def run_first_half(self, initial: GapCouncilState) -> GapCouncilState:
+        """Research the domain and return candidates with their supporting evidence."""
+        return cast(GapCouncilState, await self._first_half.ainvoke(initial))
+
+    async def run_second_half(self, state: GapCouncilState) -> list[UnmetNeed]:
+        """Critique, revise, and synthesise an existing candidate pool."""
+        final_state = await self._second_half.ainvoke(state)
         return cast(list[UnmetNeed], final_state.get("synthesised_needs", []))
 
     async def _run_craft_queries(self, state: GapCouncilState) -> dict[str, Any]:
