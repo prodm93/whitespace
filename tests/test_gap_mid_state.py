@@ -13,7 +13,7 @@ from whitespace.orchestration._gap_council_state import (
 from whitespace.orchestration._research_stage import RunMemory
 from whitespace.schemas.gap import CandidateGap
 from whitespace.schemas.profile import ProfessionalProfile, ProjectSummary
-from whitespace.schemas.question import ProposedQuestion
+from whitespace.schemas.question import ProposedQuestion, QuestionRecord
 from whitespace.schemas.research import RawFinding
 
 
@@ -69,6 +69,22 @@ def _mid_state() -> GapCouncilState:
         "findings_by_role": {"gap_identifier_1": "Graph evidence"},
         "candidates": [candidate],
         "proposed_questions": [question],
+        "pending_questions": [
+            QuestionRecord(
+                question_id="q-1",
+                run_id="run-1",
+                stage="gap",
+                purpose="unlock",
+                question=question.question,
+                hypothesis=question.hypothesis,
+                rationale=question.rationale,
+                asker_role=question.asker_role,
+                related_candidate_id=question.related_candidate_id,
+                asked=True,
+                domain="energy",
+                created_at=datetime(2026, 9, 24, 7, 0, tzinfo=UTC),
+            )
+        ],
         "gate_flags": {"gap_identifier_1-1": "near prior work"},
         "report": None,
         "revision_round": 0,

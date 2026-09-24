@@ -12,6 +12,7 @@ from whitespace.agents.council._question_proposals import resolve_question_candi
 from whitespace.agents.council.gap_critic import GapCritic
 from whitespace.agents.council.gap_identifier import GapIdentifier
 from whitespace.agents.council.gap_synthesiser import GapSynthesiser
+from whitespace.agents.council.question_gate import QuestionGate
 from whitespace.orchestration._council_common import (
     assign_candidate_ids,
     collect_batches,
@@ -23,6 +24,7 @@ from whitespace.orchestration._gap_critique_phase import (
     run_revision_node,
     run_synth_node,
 )
+from whitespace.orchestration._gap_question_stage import run_question_gate_node
 from whitespace.orchestration._research_stage import (
     ResearchStage,
     RunMemory,
@@ -43,11 +45,13 @@ class GapCouncilGraph:
         critic: GapCritic,
         synthesiser: GapSynthesiser,
         research_stage: ResearchStage,
+        question_gate: QuestionGate | None = None,
     ) -> None:
         self._identifiers = {i.role_name: i for i in identifiers}
         self._critic = critic
         self._synthesiser = synthesiser
         self._research = research_stage
+        self._question_gate = question_gate
         self._first_half = self._build_first_half()
         self._second_half = self._build_second_half()
 
@@ -56,10 +60,12 @@ class GapCouncilGraph:
         builder.add_node("craft_queries", self._run_craft_queries)
         builder.add_node("research", self._run_research)
         builder.add_node("fan_out_identifiers", self._run_identifiers)
+        builder.add_node("question_gate_node", self._run_question_gate)
         builder.set_entry_point("craft_queries")
         builder.add_edge("craft_queries", "research")
         builder.add_edge("research", "fan_out_identifiers")
-        builder.add_edge("fan_out_identifiers", END)
+        builder.add_edge("fan_out_identifiers", "question_gate_node")
+        builder.add_edge("question_gate_node", END)
         return builder.compile()
 
     def _build_second_half(self) -> Any:
@@ -99,10 +105,12 @@ class GapCouncilGraph:
             "run_memory": run_memory or RunMemory(),
         }
         mid_state = await self.run_first_half(initial_state)
+        if mid_state.get("pending_questions"):
+            raise RuntimeError("run() cannot pause for questions; call the halves directly")
         return await self.run_second_half(mid_state)
 
     async def run_first_half(self, initial: GapCouncilState) -> GapCouncilState:
-        """Research the domain and return candidates with their supporting evidence."""
+        """Research the domain and return candidates, evidence and any questions to ask."""
         return cast(GapCouncilState, await self._first_half.ainvoke(initial))
 
     async def run_second_half(self, state: GapCouncilState) -> list[UnmetNeed]:
@@ -164,6 +172,10 @@ class GapCouncilGraph:
             "report": None,
             "revision_round": 0,
         }
+
+    async def _run_question_gate(self, state: GapCouncilState) -> dict[str, Any]:
+        dedup = self._research.deduplicator
+        return await run_question_gate_node(self._question_gate, dedup, state)
 
     def _route_after_critic(self, state: GapCouncilState) -> str:
         rd, rr = state["report"], state["revision_round"]

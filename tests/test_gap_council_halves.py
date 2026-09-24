@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -10,13 +11,14 @@ import pytest
 from whitespace.agents.council.gap_critic import GapCritic
 from whitespace.agents.council.gap_identifier import GapIdentifier
 from whitespace.agents.council.gap_synthesiser import GapSynthesiser
+from whitespace.agents.council.question_gate import QuestionGate
 from whitespace.orchestration._gap_council_state import GapCouncilState
 from whitespace.orchestration._research_stage import ResearchStage, RunMemory
 from whitespace.orchestration.gap_council_graph import GapCouncilGraph
 from whitespace.schemas.critique import CriticAssessment, CriticReport, Verdict
 from whitespace.schemas.gap import CandidateGap, GapExploration, UnmetNeed
 from whitespace.schemas.profile import ProfessionalProfile
-from whitespace.schemas.question import ProposedQuestion
+from whitespace.schemas.question import GateDecision, ProposedQuestion, QuestionRecord
 
 
 @dataclass
@@ -103,6 +105,7 @@ async def test_first_half_preserves_evidence_and_stops_before_critique(council: 
     assert state["findings_by_role"] == {"gap_identifier_1": "Graph evidence"}
     assert state["proposed_questions"][0].related_candidate_id == "gap_identifier_1-1"
     assert state["gate_flags"] == {"gap_identifier_1-1": "near prior work"}
+    assert state["pending_questions"] == []
     assert state["report"] is None
     assert state["revision_round"] == 0
 
@@ -153,3 +156,31 @@ async def test_composed_council_keeps_revision_limit(
     resolved = council.synthesiser.run.call_args.args[1]
     assert resolved.assessments[0].verdict == "keep"
     assert resolved.ranking == ["gap_identifier_1-1"]
+
+
+async def test_run_refuses_to_continue_past_pending_questions(council: Council) -> None:
+    gate = MagicMock(spec=QuestionGate)
+    record = QuestionRecord(
+        question_id="q-1",
+        run_id="run-1",
+        stage="gap",
+        purpose="unlock",
+        question="Is waste heat available?",
+        hypothesis="Heat is available",
+        rationale="Determines whether recovery is possible",
+        asker_role="gap_identifier_1",
+        asked=True,
+        created_at=datetime(2026, 9, 24, tzinfo=UTC),
+    )
+    gate.judge = AsyncMock(return_value=GateDecision(ask=True, questions=[record], reasoning=""))
+    council.research.deduplicator.similarity_matrix = AsyncMock(return_value=[[1.0]])
+    graph = GapCouncilGraph(
+        [council.identifier], council.critic, council.synthesiser, council.research, gate
+    )
+
+    state = await graph.run_first_half(council.initial)
+    assert state["pending_questions"] == [record]
+
+    with pytest.raises(RuntimeError):
+        await graph.run(council.initial["profile"], council.initial["domain"])
+    council.critic.run.assert_not_awaited()

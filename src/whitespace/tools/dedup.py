@@ -95,6 +95,20 @@ class SemanticDeduplicator:
             result.append((sims[best_idx], reference[best_idx]))
         return result
 
+    async def similarity_matrix(self, texts: list[str]) -> list[list[float]]:
+        """Pairwise cosine similarity between every pair of texts.
+
+        Raises on embedding failure so callers can report the check as
+        unavailable instead of treating it as "no similarity".
+        """
+        if not texts:
+            return []
+        embedder = self._graphiti.graphiti.embedder
+        vectors = await embedder.create_batch([t[:_EMBED_CHARS] for t in texts])
+        if len(vectors) != len(texts):
+            raise ValueError(f"Embedder returned {len(vectors)} vectors for {len(texts)} texts")
+        return [[_cosine(a, b) for b in vectors] for a in vectors]
+
 
 def _drop_exact(findings: list[RawFinding]) -> tuple[list[RawFinding], list[str]]:
     """Cheap first pass: drop byte-identical texts before embedding."""

@@ -10,7 +10,7 @@ from whitespace.orchestration._research_stage import RunMemory
 from whitespace.schemas.critique import CriticReport
 from whitespace.schemas.gap import CandidateGap, UnmetNeed
 from whitespace.schemas.profile import ProfessionalProfile
-from whitespace.schemas.question import ProposedQuestion
+from whitespace.schemas.question import ProposedQuestion, QuestionRecord
 
 
 class GapCouncilState(TypedDict, total=False):
@@ -25,6 +25,7 @@ class GapCouncilState(TypedDict, total=False):
     findings_by_role: dict[str, str]
     candidates: list[CandidateGap]
     proposed_questions: list[ProposedQuestion]
+    pending_questions: list[QuestionRecord]
     gate_flags: dict[str, str]
     report: CriticReport | None
     revision_round: int
@@ -38,6 +39,7 @@ _MODELS: dict[str, type[BaseModel]] = {
 _MODEL_LISTS: dict[str, type[BaseModel]] = {
     "candidates": CandidateGap,
     "proposed_questions": ProposedQuestion,
+    "pending_questions": QuestionRecord,
 }
 
 

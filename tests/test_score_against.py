@@ -1,9 +1,11 @@
-"""Tests for SemanticDeduplicator.score_against and score_against_with_best."""
+"""Tests for SemanticDeduplicator.score_against, score_against_with_best and similarity_matrix."""
 
 from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from whitespace.tools.dedup import SemanticDeduplicator, _cosine
 
@@ -115,3 +117,33 @@ class TestCosine:
 
     def test_zero_vector(self) -> None:
         assert _cosine([0, 0], [1, 0]) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# similarity_matrix
+# ---------------------------------------------------------------------------
+
+
+class TestSimilarityMatrix:
+    def test_scores_every_pair(self) -> None:
+        dedup = _dedup([[1, 0], [0, 1], [1, 0]])
+        matrix = asyncio.run(dedup.similarity_matrix(["a", "b", "c"]))
+        assert [[round(score, 9) for score in row] for row in matrix] == [
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, 1.0],
+        ]
+
+    def test_empty_input_skips_embedding(self) -> None:
+        dedup = _dedup_failing()
+        assert asyncio.run(dedup.similarity_matrix([])) == []
+
+    def test_raises_on_embedding_error(self) -> None:
+        dedup = _dedup_failing()
+        with pytest.raises(RuntimeError):
+            asyncio.run(dedup.similarity_matrix(["a"]))
+
+    def test_raises_on_vector_count_mismatch(self) -> None:
+        dedup = _dedup([[1, 0]])
+        with pytest.raises(ValueError):
+            asyncio.run(dedup.similarity_matrix(["a", "b"]))
