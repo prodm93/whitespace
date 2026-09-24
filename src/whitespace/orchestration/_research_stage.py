@@ -1,14 +1,14 @@
 """Pre-council research stage: execute queries, dedup, store, ingest.
 
-Pure coordination — query crafting stays with the identifiers, judgment
+Pure coordination. Query crafting stays with the identifiers, judgment
 stays with the council.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import TypeVar
+from dataclasses import asdict, dataclass, field
+from typing import Any, TypeVar
 
 from whitespace.agents.council.prior_art_agent import PriorArtAgent
 from whitespace.orchestration.ingest_graph import IngestGraph
@@ -37,6 +37,17 @@ class RunMemory:
     memory: str = ""
     prior_texts: list[str] = field(default_factory=list)
     neighbours: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-compatible form for carrying the memory across a paused run."""
+        data = asdict(self)
+        data["prior_findings"] = [f.model_dump(mode="json") for f in self.prior_findings]
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RunMemory:
+        findings = [RawFinding.model_validate(f) for f in data["prior_findings"]]
+        return cls(**{**data, "prior_findings": findings})
 
 
 def format_findings(findings: list[RawFinding]) -> str:

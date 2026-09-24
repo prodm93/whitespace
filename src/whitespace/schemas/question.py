@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ProposedQuestion(BaseModel):
@@ -13,7 +13,7 @@ class ProposedQuestion(BaseModel):
     hypothesis: str
     asker_role: str
     related_candidate_id: str = ""
-    related_candidate_title: str = Field(default="", exclude=True)
+    related_candidate_title: str = ""
 
 
 class UserAnswer(BaseModel):

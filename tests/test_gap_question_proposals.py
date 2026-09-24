@@ -57,9 +57,9 @@ def test_parse_clarify_proposal_discards_candidate_title() -> None:
     assert parsed.related_candidate_title == ""
 
 
-def test_candidate_title_is_not_serialised_beyond_proposal_capture() -> None:
+def test_candidate_title_is_serialised_with_the_proposal() -> None:
     (parsed,) = parse_proposed_questions([proposal()], "gap_identifier_1")
-    assert "related_candidate_title" not in parsed.model_dump()
+    assert parsed.model_dump()["related_candidate_title"] == "Adaptive kiln control"
 
 
 @pytest.mark.parametrize("raw", [None, {}, "malformed"])
