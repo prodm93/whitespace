@@ -7,13 +7,7 @@
 # privileged caller. Our container never invokes ACL utilities on
 # user-controlled paths. Upstream fix: acl >= 2.4.0.
 # https://thewindowsupdate.com/2026/06/30/cve-2026-54369-acl-2-4-0-symlink-traversal-privilege-escalation-via-libacl-functions/
-CVE-2026-54369 exp:2026-10-01
-
-# libattr1 1:2.5.2-3: symlink traversal in getfattr/setfattr.
-# Same class as CVE-2026-54369. Our container never calls getfattr or
-# setfattr. Upstream fix: attr >= 2.6.0.
-# https://thewindowsupdate.com/2026/06/30/cve-2026-54371-attr-2-6-0-symlink-traversal-privilege-escalation-via-getfattr-setfattr/
-CVE-2026-54371 exp:2026-10-01
+CVE-2026-54369 exp:2027-02-07
 
 # ncurses 6.5+20250216-2 (libncursesw6, libtinfo6, ncurses-base, ncurses-bin)
 # Stack buffer overflow in infocmp's analyze_string() via crafted termcap
@@ -21,90 +15,34 @@ CVE-2026-54371 exp:2026-10-01
 # capability strings. Fixed upstream in 6.5-20251213, not backported to
 # Debian 13.
 # https://github.com/Cao-Wuhui/CVE-2025-69720
-CVE-2025-69720 exp:2026-10-01
+CVE-2025-69720 exp:2027-02-07
 
-# perl-base 5.40.1-6: seven CVEs, all Debian status "affected" or
-# "fix_deferred". Our application does not use Perl. Perl is pulled in by
-# the base image for dpkg/apt internals only.
-
-# Silently incorrect regex matches when an alternation exceeds 65535
-# fixed-string branches (trie 16-bit field overflow). Requires compiling
-# a pattern with >64k branches; our application never builds Perl regexes.
-# https://avd.aquasec.com/nvd/cve-2026-13221
-CVE-2026-13221 exp:2026-10-01
-
-# Integer overflow in S_measure_struct; out-of-bounds heap read via
-# crafted pack/unpack template. Requires untrusted input to Perl's
-# pack/unpack; our application never invokes Perl.
-# https://avd.aquasec.com/nvd/cve-2026-57432
-CVE-2026-57432 exp:2026-10-01
-
-# Storable signed integer overflow deserialising crafted SX_HOOK records.
-# Causes panic/abort, not code execution. Fixed in perl 5.40.1-8 (Debian
-# unstable), not yet in stable. Our application never invokes Perl.
-# https://security-tracker.debian.org/tracker/CVE-2026-57433
-CVE-2026-57433 exp:2026-10-01
-
-# Heap buffer overflow in regex compilation. This only triggers on 32-bit
-# builds. Our container is 64-bit.
-# https://security.snyk.io/vuln/SNYK-DEBIAN13-PERL-17037434
-CVE-2026-8376 exp:2026-10-01
-
-# Archive::Tar path traversal via crafted symlinks. Fixed upstream in
-# Archive::Tar 3.08. Debian: fix_deferred.
-# https://security-tracker.debian.org/tracker/CVE-2026-42496
-CVE-2026-42496 exp:2026-10-01
-
-# Archive::Tar hardlink extraction outside target directory. Fixed upstream
-# in Archive::Tar 3.08. Debian: fix_deferred.
-# https://security-tracker.debian.org/tracker/source-package/perl
-CVE-2026-42497 exp:2026-10-01
-
-# IO::Compress arbitrary code execution via eval STRING on attacker-
-# controlled output glob. Fixed in IO::Compress 2.220. Backported to
-# perl 5.40.1-8 in Debian unstable, not yet in stable.
-# https://www.openwall.com/lists/oss-security/2026/05/27/4
-CVE-2026-48962 exp:2026-10-01
+# perl-base 5.40.1-6+deb13u1: Debian status "fix_deferred". Our application
+# does not use Perl. Perl is pulled in by the base image for dpkg/apt
+# internals only.
 
 # Archive::Tar memory exhaustion via oversized size field in tar header.
 # Fixed upstream in Archive::Tar 3.10. Debian: fix_deferred.
 # https://www.openwall.com/lists/oss-security/2026/05/26/4
-CVE-2026-9538 exp:2026-10-01
+CVE-2026-9538 exp:2027-02-07
 
-# gzip 1.13-1: global buffer over-read in LZH decompression via poisoned
-# shared global state between LZW and LZH formats (CWE-126). Requires local
-# decompression of crafted archives; our container never invokes gzip on
-# untrusted LZH input. Fixed upstream (63dbf6b), not yet packaged for
-# Debian 13.
-# https://cert.pl/en/posts/2026/06/CVE-2026-41991/
-CVE-2026-41992 exp:2026-10-01
+# libsqlite3-0 3.46.1-7+deb13u2: three heap buffer overflows. Two are in
+# FTS5 (prefix doclist merging; secure-delete on a corrupted FTS5 index) and
+# one is in the session extension (sqlite3changeset_apply on crafted
+# changesets). Exploitation requires attacker-controlled FTS5 tables, a
+# crafted database file or a crafted changeset. WhiteSpace accepts no SQLite
+# uploads or user-supplied SQL; its session store creates ordinary tables,
+# defines no FTS5 table and applies no changesets. Debian 13 marks all three
+# no-dsa (minor) and has no stable fix; fixed upstream in SQLite 3.54.0 and
+# in Debian unstable 3.54.1-1.
+# https://security-tracker.debian.org/tracker/CVE-2026-119373
+CVE-2026-119373 exp:2027-02-07
 
-# libsqlite3-0 3.46.1-7+deb13u1: heap out-of-bounds write in
-# FTS5 page processing. Upstream documents both CVEs as the same bug.
-# Exploitation requires attacker-controlled SQL, FTS5 enabled and defensive
-# mode disabled. WhiteSpace accepts no SQLite uploads or user-supplied SQL;
-# its session store creates ordinary tables and executes no FTS5 MATCH query.
-# Debian 13 marks both no-dsa (minor) and has no stable fix; fixed upstream
-# in SQLite 3.53.2 and in Debian unstable 3.53.2-1.
-# https://www.sqlite.org/cves.html
-# https://security-tracker.debian.org/tracker/CVE-2026-11822
-CVE-2026-11822 exp:2026-10-01
+# https://security-tracker.debian.org/tracker/CVE-2026-119374
+CVE-2026-119374 exp:2027-02-07
 
-# Same FTS5 heap-overflow bug and unreachable execution path as above.
-# https://security-tracker.debian.org/tracker/CVE-2026-11824
-CVE-2026-11824 exp:2026-10-01
-
-# libblkid1/bsdutils/util-linux family 2.41-5: integer overflow in the DOS
-# partition table parser (parse_dos_extended in dos.c). A crafted lba_start
-# wraps a uint32_t addition and registers a fake partition at sector 0.
-# Requires libblkid to parse a malicious partition table: local block-device
-# access, udev/udisks2 auto-probing, or explicit blkid/mount on
-# attacker-controlled disk images. Our container never mounts block devices
-# or processes untrusted disk images; libblkid1 is an unused transitive
-# dependency of the base image. Fixed upstream in util-linux 2.42 / 2.41.4,
-# not yet backported to Debian 13.
-# https://security-tracker.debian.org/tracker/CVE-2026-53615
-CVE-2026-53615 exp:2026-10-01
+# https://security-tracker.debian.org/tracker/CVE-2026-119379
+CVE-2026-119379 exp:2027-02-07
 
 # util-linux family 2.41.5-0+deb13u1: four local privilege-escalation
 # paths in mount(8), libmount and nsenter. The image does not create or
@@ -118,28 +56,28 @@ CVE-2026-53615 exp:2026-10-01
 # or X-mount.owner/group/mode, none of which exist in this container.
 # https://security-tracker.debian.org/tracker/CVE-2026-76642
 # https://github.com/util-linux/util-linux/security/advisories/GHSA-m25x-3hj9-m26f
-CVE-2026-76642 exp:2026-10-01
+CVE-2026-76642 exp:2027-02-07
 
 # nsenter --join-cgroup can leave a root-opened cgroup.procs descriptor with
 # an attacker-controlled target. This container never invokes nsenter and
 # does not grant local users control of cgroup namespace targets.
 # https://security-tracker.debian.org/tracker/CVE-2026-78408
 # https://github.com/util-linux/util-linux/security/advisories/GHSA-55fx-f4gg-cfhj
-CVE-2026-78408 exp:2026-10-01
+CVE-2026-78408 exp:2027-02-07
 
 # X-mount.subdir can traverse an intermediate symlink outside a detached
 # mount tree. Exploitation requires a local user-authorised fstab entry and
 # a user-controlled path. This container has neither.
 # https://security-tracker.debian.org/tracker/CVE-2026-78409
 # https://github.com/util-linux/util-linux/security/advisories/GHSA-8f2p-47x3-43mv
-CVE-2026-78409 exp:2026-10-01
+CVE-2026-78409 exp:2027-02-07
 
 # Restricted bind mounts can resolve a replaced source path before privileged
 # ownership or mode changes. Exploitation requires a local user-authorised
 # fstab entry with a writable source ancestor. This container has none.
 # https://security-tracker.debian.org/tracker/CVE-2026-78410
 # https://github.com/util-linux/util-linux/security/advisories/GHSA-rh77-686x-2f2m
-CVE-2026-78410 exp:2026-10-01
+CVE-2026-78410 exp:2027-02-07
 
 # libsystemd0/libudev1 257.13-1~deb13u1: Trivy maps a systemd-homed local
 # privilege-escalation advisory to these libraries. The slim container does
@@ -148,14 +86,7 @@ CVE-2026-78410 exp:2026-10-01
 # (minor) and has no stable fix; fixed upstream in systemd 258.10 and 261.2.
 # https://security-tracker.debian.org/tracker/CVE-2026-16742
 # https://github.com/systemd/systemd/security/advisories/GHSA-jm29-p7hh-vjhv
-CVE-2026-16742 exp:2026-10-01
-
-# OpenSSL 3.5.6: unbounded incoming-channel queue in OpenSSL QUIC servers.
-# The BYOK service runs Uvicorn over HTTP and never creates an OpenSSL QUIC
-# listener, so the affected code path is unreachable. Fixed in OpenSSL 3.5.8;
-# Debian 13 has not published a patched package.
-# https://www.openssl-library.org/news/vulnerabilities-3.6/
-CVE-2026-14456 exp:2026-10-01
+CVE-2026-16742 exp:2027-02-07
 
 
 # ============================================================================
@@ -168,7 +99,7 @@ CVE-2026-14456 exp:2026-10-01
 # portfolio project with minimal traffic. Add WAF when scaling up.
 # https://aws.amazon.com/waf/pricing/
 # https://avd.aquasec.com/misconfig/aws-0011
-AVD-AWS-0011 exp:2026-10-01
+AVD-AWS-0011 exp:2027-02-07
 
 # S3 buckets without Customer Managed Key (CMK) encryption. S3 already
 # encrypts all objects with SSE-S3 (AES-256) by default since Jan 2023.
@@ -177,11 +108,11 @@ AVD-AWS-0011 exp:2026-10-01
 # or if handling regulated data.
 # https://github.com/aquasecurity/trivy/discussions/8926
 # https://avd.aquasec.com/misconfig/aws-0132
-AVD-AWS-0132 exp:2026-10-01
+AVD-AWS-0132 exp:2027-02-07
 
 # SNS topic encrypted with AWS-managed key (alias/aws/sns) instead of a
 # Customer Managed Key. Same rationale as S3 CMK above; CMK adds $1/month
 # for granular key management that isn't needed for alarm notifications on a
 # portfolio project. Upgrade to CMK when scaling up.
 # https://avd.aquasec.com/misconfig/aws-0136
-AVD-AWS-0136 exp:2026-10-01
+AVD-AWS-0136 exp:2027-02-07
