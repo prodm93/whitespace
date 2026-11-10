@@ -51,6 +51,9 @@ class Config(BaseSettings):
     # Session store (BYOK: SQLite)
     sqlite_db_path: str = "data/whitespace.db"
 
+    # Gap-run snapshots (BYOK only; empty disables them)
+    gap_snapshot_dir: str = ""
+
     # Observability
     langsmith_api_key: str = ""
     langsmith_project: str = ""

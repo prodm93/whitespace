@@ -48,6 +48,7 @@ def _build_pipeline(
     from whitespace.observability.langsmith import configure_tracing_env
     from whitespace.observability.local_metrics import LocalMetricsEmitter
     from whitespace.observability.metrics import MetricsEmitter
+    from whitespace.orchestration._gap_snapshot import GapSnapshotWriter
     from whitespace.orchestration._research_stage import ResearchStage
     from whitespace.playbook import PLAYBOOK
     from whitespace.tools.dedup import SemanticDeduplicator
@@ -99,6 +100,9 @@ def _build_pipeline(
     ]
     idea_ideators = [IdeaIdeator(config, router, f"idea_ideator_{i}") for i in range(1, 4)]
     dedup = SemanticDeduplicator(graphiti)
+    snapshot_writer = None
+    if config.mode == "byok" and config.gap_snapshot_dir:
+        snapshot_writer = GapSnapshotWriter(Path(config.gap_snapshot_dir))
 
     return cls(
         config=config,
@@ -112,6 +116,7 @@ def _build_pipeline(
             GapCritic(config, router),
             GapSynthesiser(config, router),
             ResearchStage(prior_art, dedup, Normaliser(), ingest_graph, store=session_store),
+            snapshot_writer=snapshot_writer,
         ),
         ideation_council=IdeationCouncilGraph(
             idea_ideators,

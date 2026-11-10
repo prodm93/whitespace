@@ -15,6 +15,9 @@ venv/
 .env
 .env.local
 
+# Local run data
+data/
+
 # Node / Frontend
 node_modules/
 frontend/dist/

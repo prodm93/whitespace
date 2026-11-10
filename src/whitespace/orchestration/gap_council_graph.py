@@ -25,6 +25,7 @@ from whitespace.orchestration._gap_critique_phase import (
     run_synth_node,
 )
 from whitespace.orchestration._gap_question_stage import run_question_gate_node
+from whitespace.orchestration._gap_snapshot import GapSnapshotWriter
 from whitespace.orchestration._research_stage import (
     ResearchStage,
     RunMemory,
@@ -46,7 +47,9 @@ class GapCouncilGraph:
         synthesiser: GapSynthesiser,
         research_stage: ResearchStage,
         question_gate: QuestionGate | None = None,
+        snapshot_writer: GapSnapshotWriter | None = None,
     ) -> None:
+        self._snapshot_writer = snapshot_writer
         self._identifiers = {i.role_name: i for i in identifiers}
         self._critic = critic
         self._synthesiser = synthesiser
@@ -105,6 +108,8 @@ class GapCouncilGraph:
             "run_memory": run_memory or RunMemory(),
         }
         mid_state = await self.run_first_half(initial_state)
+        if self._snapshot_writer is not None:
+            await self._snapshot_writer.save(mid_state)
         if mid_state.get("pending_questions"):
             raise RuntimeError("run() cannot pause for questions; call the halves directly")
         return await self.run_second_half(mid_state)
