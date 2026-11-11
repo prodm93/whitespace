@@ -51,6 +51,9 @@ class Config(BaseSettings):
     # Session store (BYOK: SQLite)
     sqlite_db_path: str = "data/whitespace.db"
 
+    # Paused question runs (BYOK: LangGraph checkpoints)
+    question_checkpoint_db_path: str = "data/question_checkpoints.db"
+
     # Gap-run snapshots (BYOK only; empty disables them)
     gap_snapshot_dir: str = ""
 
