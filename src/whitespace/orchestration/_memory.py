@@ -1,4 +1,4 @@
-"""Cross-run memory assembly — what earlier runs teach the current one.
+"""Cross-run memory assembly: what earlier runs teach the current one.
 
 Loads prior output, rejections, executed queries and stored findings from
 the session store and shapes them for the councils. Query and finding memory
@@ -67,7 +67,7 @@ async def load_gap_memory(
 
     if exact_needs or exact_discards or exact_findings:
         logger.info(
-            "load_gap_memory: exact — %d needs, %d discards, %d findings",
+            "load_gap_memory: exact: %d needs, %d discards, %d findings",
             len(exact_needs),
             len(exact_discards),
             len(exact_findings),
@@ -127,3 +127,14 @@ async def load_ideation_negatives(store: SessionStore | None) -> str:
         "Do NOT repeat or trivially vary any of these. Rejected entries "
         "include the reason; treat them as settled.\n\n" + "\n".join(lines)
     )
+
+
+async def load_ideation_prior_texts(store: SessionStore | None) -> list[str]:
+    """Prior proposals and rejected ideas as texts for the duplicate gate."""
+    if store is None:
+        return []
+    proposals = await store.get_all_previous_proposals()
+    discards = await store.list_discards("idea")
+    return [f"{p.title}: {p.problem_statement}" for p in proposals] + [
+        f"{d['title']}: {d['description']}" for d in discards
+    ]

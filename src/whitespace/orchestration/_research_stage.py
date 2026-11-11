@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, TypeVar
 
 from whitespace.agents.council.prior_art_agent import PriorArtAgent
+from whitespace.orchestration._prior_output_gate import gate_against_prior
 from whitespace.orchestration.ingest_graph import IngestGraph
 from whitespace.schemas.critique import CandidateLike, CriticReport
 from whitespace.schemas.research import RawFinding
@@ -22,8 +23,6 @@ logger = logging.getLogger(__name__)
 
 C = TypeVar("C", bound=CandidateLike)
 
-_GATE_KILL_THRESHOLD = 0.95
-_GATE_FLAG_FLOOR = 0.85
 _MAX_FINDINGS_CHARS = 20000
 
 
@@ -133,30 +132,8 @@ class ResearchStage:
         Returns the surviving pool and a flags dict mapping candidate IDs
         to a note for the critic when a candidate is in the grey zone.
         """
-        if not prior_texts or not pool:
-            return pool, {}
-        candidate_texts = [f"{c.title}: {c.description}" for c in pool]
-        scored = await self._dedup.score_against_with_best(candidate_texts, prior_texts)
-        kept: list[C] = []
-        flags: dict[str, str] = {}
-        kill_items: list[dict[str, str]] = []
-        for candidate, (score, best_match) in zip(pool, scored, strict=True):
-            if score >= _GATE_KILL_THRESHOLD:
-                kill_items.append(
-                    {
-                        "title": candidate.title,
-                        "description": candidate.description,
-                        "reason": "near-duplicate of a previous run's output",
-                        "domain": domain,
-                    }
-                )
-            elif score >= _GATE_FLAG_FLOOR:
-                kept.append(candidate)
-                flags[candidate.candidate_id] = (
-                    f"resembles prior work (score {score:.2f}): {best_match[:200]}"
-                )
-            else:
-                kept.append(candidate)
+        kept, flags, kill_items = await gate_against_prior(self._dedup, pool, prior_texts)
+        kill_items = [{**item, "domain": domain} for item in kill_items]
         if kill_items:
             await self.record_discards(run_id, kind, kill_items, domain)
             logger.info("ResearchStage: gated %d cross-run duplicates", len(kill_items))
