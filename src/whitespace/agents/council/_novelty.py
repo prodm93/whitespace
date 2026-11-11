@@ -2,7 +2,7 @@
 
 Each ideator hunts duplicates of its own ideas: it crafts queries
 hellbent on finding identical or near-identical prior work, the
-prior-art agent executes them, and the ideator decides per idea —
+prior-art agent executes them, and the ideator decides per idea:
 clear, modify, or drop. Two rounds maximum; whatever still has an
 identifiable (semi-)duplicate after that is discarded automatically.
 """
@@ -26,7 +26,7 @@ _RESULTS_PER_QUERY = 5
 _QUERY_PROMPT = """\
 You are checking your own invention ideas for novelty. For each idea \
 below, write {n} search queries hellbent on finding anything identical \
-or nearly identical — the same problem solved the same way. Use the \
+or nearly identical: the same problem solved the same way. Use the \
 vocabulary a patent examiner or rival inventor would use, not your own \
 phrasing. Return JSON: {{"queries": ["...", ...]}}.\
 """
@@ -36,11 +36,11 @@ You are judging whether your own invention ideas survive a novelty \
 check. For each idea you will see search results from patents, papers \
 and the web. Decide per idea:
 
-- **clear** — nothing identical or near-identical exists.
-- **modify** — something close exists, but the idea can be reworked to \
+- **clear**: nothing identical or near-identical exists.
+- **modify**: something close exists, but the idea can be reworked to \
 be genuinely distinct. Provide revised_title and revised_description \
 that differentiate it concretely from what was found.
-- **drop** — an identical or near-identical thing exists and no honest \
+- **drop**: an identical or near-identical thing exists and no honest \
 modification escapes it.
 
 Be ruthless: a (semi-)duplicate that ships embarrasses everyone. \
@@ -137,7 +137,8 @@ async def _craft_queries(
     except (json.JSONDecodeError, AttributeError):
         logger.warning("novelty[%s]: query crafting returned malformed JSON", role)
         return [i.title for i in ideas]
-    return [q for q in queries if isinstance(q, str) and q.strip()]
+    valid = [q for q in queries if isinstance(q, str) and q.strip()]
+    return valid[: _QUERIES_PER_IDEA * len(ideas)]
 
 
 async def _decide(
