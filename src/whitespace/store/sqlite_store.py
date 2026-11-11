@@ -8,11 +8,10 @@ import aiosqlite
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
-from whitespace.schemas.research import RawFinding
 from whitespace.store._sqlite_questions import SqliteQuestionStoreMixin
+from whitespace.store._sqlite_research_rows import SqliteResearchRowsMixin
 from whitespace.store._sqlite_rows import (
     _SCHEMA,
-    _where,
     ensure_domain_columns,
     row_to_gap_run,
     row_to_idea_run,
@@ -22,7 +21,7 @@ from whitespace.store.base import GapRun, IdeaRun, SessionStore
 logger = logging.getLogger(__name__)
 
 
-class SqliteSessionStore(SqliteQuestionStoreMixin, SessionStore):
+class SqliteSessionStore(SqliteResearchRowsMixin, SqliteQuestionStoreMixin, SessionStore):
     """SQLite-backed session store for BYOK mode."""
 
     def __init__(self, db_path: str | Path) -> None:
@@ -120,78 +119,3 @@ class SqliteSessionStore(SqliteQuestionStoreMixin, SessionStore):
             cursor = await db.execute("SELECT proposals_json FROM idea_runs")
             rows = await cursor.fetchall()
         return [IdeationProposal.model_validate(p) for row in rows for p in json.loads(row[0])]
-
-    async def save_raw_findings(self, run_id: str, findings: list[RawFinding]) -> None:
-        if not findings:
-            return
-        await self._ensure_schema()
-        rows = [
-            (
-                run_id,
-                f.found_at.isoformat(),
-                f.model_dump_json(),
-                f.domain.strip().lower() if f.domain else None,
-            )
-            for f in findings
-        ]
-        async with aiosqlite.connect(self._db_path) as db:
-            await db.executemany(
-                "INSERT INTO raw_findings (run_id, found_at, finding_json, domain)"
-                " VALUES (?, ?, ?, ?)",
-                rows,
-            )
-            await db.commit()
-        logger.info("SqliteSessionStore: saved %d raw findings for run %s", len(rows), run_id)
-
-    async def list_raw_findings(self, run_id: str | None = None) -> list[RawFinding]:
-        await self._ensure_schema()
-        conds = []
-        if run_id is not None:
-            conds.append(("run_id = ?", run_id))
-        where, params = _where(conds)
-        async with aiosqlite.connect(self._db_path) as db:
-            cursor = await db.execute(
-                f"SELECT finding_json FROM raw_findings{where} ORDER BY found_at DESC", params
-            )
-            rows = await cursor.fetchall()
-        return [RawFinding.model_validate_json(row[0]) for row in rows]
-
-    async def save_discards(self, run_id: str, kind: str, items: list[dict[str, str]]) -> None:
-        if not items:
-            return
-        await self._ensure_schema()
-        rows = [
-            (
-                run_id,
-                kind,
-                i.get("title", ""),
-                i.get("description", ""),
-                i.get("reason", ""),
-                i.get("domain", "").strip().lower() or None,
-            )
-            for i in items
-        ]
-        async with aiosqlite.connect(self._db_path) as db:
-            await db.executemany(
-                "INSERT INTO discards (run_id, kind, title, description, reason, domain)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                rows,
-            )
-            await db.commit()
-        logger.info("SqliteSessionStore: saved %d %s discards", len(rows), kind)
-
-    async def list_discards(self, kind: str | None = None) -> list[dict[str, str]]:
-        await self._ensure_schema()
-        conds = []
-        if kind is not None:
-            conds.append(("kind = ?", kind))
-        where, params = _where(conds)
-        async with aiosqlite.connect(self._db_path) as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute(
-                f"SELECT kind, title, description, reason, domain FROM discards{where}"
-                " ORDER BY id DESC",
-                params,
-            )
-            rows = await cursor.fetchall()
-        return [dict(row) for row in rows]

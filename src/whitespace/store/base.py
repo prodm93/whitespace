@@ -37,6 +37,7 @@ class PendingPause(BaseModel):
     stage: Literal["gap", "ideation"]
     questions: list[QuestionRecord]
     created_at: datetime
+    computed: bool = False
 
 
 class SessionStore(ABC):
