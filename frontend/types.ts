@@ -48,6 +48,7 @@ export interface CredentialsResult {
   neo4j_ok: boolean;
   openrouter_error: string | null;
   neo4j_error: string | null;
+  waiting?: boolean;
 }
 
 export interface UnmetNeed {
@@ -76,11 +77,27 @@ export interface IdeationProposal {
   critique_notes: string | null;
 }
 
+export interface PendingQuestion {
+  question_id: string;
+  question: string;
+  hypothesis: string;
+  rationale: string;
+  status?: string;
+  answer?: string;
+}
+
+export interface QuestionAnswerIn {
+  question_id: string;
+  answer: string;
+  skipped: boolean;
+}
+
 export interface OrchestrateResult {
   needs: UnmetNeed[];
   proposals: IdeationProposal[];
-  status: "done" | "awaiting_selection" | "blocked";
+  status: "done" | "awaiting_selection" | "awaiting_answers" | "blocked";
   reason: string | null;
+  questions?: PendingQuestion[];
 }
 
 export interface GapRun {
@@ -100,6 +117,11 @@ export interface IdeaRun {
 export interface LatestRunsResponse {
   gap_run: GapRun | null;
   idea_runs: IdeaRun[];
+  pending_questions?: {
+    stage: string;
+    editable: boolean;
+    questions: PendingQuestion[];
+  } | null;
 }
 
 export type JobType = "ingest" | "orchestrate";

@@ -6,7 +6,7 @@ import { parseAuraFile } from "./AuraFileParser";
 import { submitCredentials } from "@/lib/api";
 
 interface ByokFormProps {
-  onConnect: (creds: ByokCredentials) => void;
+  onConnect: (creds: ByokCredentials, waiting: boolean) => void;
   onBack: () => void;
 }
 
@@ -60,7 +60,7 @@ export default function ByokForm({ onConnect, onBack }: ByokFormProps) {
     try {
       const result = await submitCredentials(creds);
       if (result.openrouter_ok && result.neo4j_ok) {
-        onConnect(creds);
+        onConnect(creds, result.waiting === true);
       } else {
         const errors: string[] = [];
         if (!result.openrouter_ok)

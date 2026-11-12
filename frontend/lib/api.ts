@@ -4,6 +4,7 @@ import type {
   JobResponse,
   JobResult,
   LatestRunsResponse,
+  QuestionAnswerIn,
   StagedUpload,
   UploadUrlResponse,
 } from "@/types";
@@ -43,7 +44,20 @@ export async function submitCredentials(
     }),
   });
   if (!res.ok) {
-    const detail = await res.text();
+    const text = await res.text();
+    let detail = text;
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (
+        parsed !== null &&
+        typeof parsed === "object" &&
+        typeof (parsed as { detail?: unknown }).detail === "string"
+      ) {
+        detail = (parsed as { detail: string }).detail;
+      }
+    } catch {
+      detail = text;
+    }
     return {
       status: "error",
       openrouter_ok: false,
@@ -85,12 +99,19 @@ export async function orchestrate(
   selectedTitles: string[] = [],
   freshStart = false,
   staged?: StagedUpload,
+  extras?: { questionAnswers?: QuestionAnswerIn[]; askQuestions?: boolean },
 ): Promise<JobResponse> {
   const body: Record<string, unknown> = {
     intent,
     selected_titles: selectedTitles,
     fresh_start: freshStart,
   };
+  if (extras?.questionAnswers !== undefined) {
+    body.question_answers = extras.questionAnswers;
+  }
+  if (extras?.askQuestions !== undefined) {
+    body.ask_questions = extras.askQuestions;
+  }
   if (staged) {
     body.profile_paths = staged.profile_paths;
     body.doc_paths = staged.doc_paths;

@@ -6,6 +6,7 @@ import BlockedPhase from "./_BlockedPhase";
 import JobProgress from "@/components/jobs/JobProgress";
 import GapResults from "@/components/gaps/GapResults";
 import IdeationResults from "@/components/ideation/IdeationResults";
+import QuestionForm from "@/components/questions/QuestionForm";
 
 export default function Workspace() {
   const workflow = useWorkflow();
@@ -41,6 +42,16 @@ export default function Workspace() {
     );
   } else if (workflow.phase === "ideation-results") {
     content = <IdeationResults proposals={workflow.proposals} />;
+  } else if (workflow.phase === "questions") {
+    content = (
+      <QuestionForm
+        questions={workflow.questions}
+        editable={workflow.questionsEditable}
+        submitting={workflow.answersSubmitting}
+        submitError={workflow.submitError}
+        onSubmit={workflow.handleSubmitAnswers}
+      />
+    );
   } else if (workflow.phase === "blocked") {
     content = (
       <BlockedPhase
@@ -70,6 +81,11 @@ export default function Workspace() {
         error={workflow.error}
         handleBuild={workflow.handleBuild}
         submitting={workflow.submitting}
+        hasPendingQuestions={workflow.hasPendingQuestions}
+        handleOpenQuestions={workflow.handleOpenQuestions}
+        keysWaiting={workflow.keysWaiting}
+        askQuestions={workflow.askQuestions}
+        setAskQuestions={workflow.setAskQuestions}
       />
     );
   }

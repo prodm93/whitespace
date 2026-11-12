@@ -2,6 +2,8 @@ import type {
   IdeationProposal,
   JobResult,
   LatestRunsResponse,
+  PendingQuestion,
+  QuestionAnswerIn,
   UnmetNeed,
   UploadedFile,
 } from "@/types";
@@ -12,6 +14,7 @@ export type Phase =
   | "orchestrating"
   | "gap-results"
   | "ideation-results"
+  | "questions"
   | "blocked";
 
 export interface WorkflowState {
@@ -32,6 +35,13 @@ export interface WorkflowState {
   resumeDismissed: boolean;
   backAction: () => void;
   backLabel: string;
+  questions: PendingQuestion[];
+  questionsEditable: boolean;
+  askQuestions: boolean;
+  answersSubmitting: boolean;
+  submitError: string;
+  hasPendingQuestions: boolean;
+  keysWaiting: boolean;
 }
 
 export interface WorkflowActions {
@@ -53,4 +63,7 @@ export interface WorkflowActions {
   goToInput: () => void;
   goToGapResults: () => void;
   handleResume: () => void;
+  setAskQuestions: (v: boolean) => void;
+  handleSubmitAnswers: (answers: QuestionAnswerIn[]) => Promise<void>;
+  handleOpenQuestions: () => void;
 }

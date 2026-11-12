@@ -16,8 +16,8 @@ export default function Onboarding() {
     setMode(mode);
   };
 
-  const handleByokConnect = (creds: ByokCredentials) => {
-    setByokCredentials(creds);
+  const handleByokConnect = (creds: ByokCredentials, waiting: boolean) => {
+    setByokCredentials(creds, waiting);
   };
 
   const handleBack = () => {

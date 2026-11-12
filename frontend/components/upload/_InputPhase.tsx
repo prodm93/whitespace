@@ -1,6 +1,7 @@
 import DropZone from "./DropZone";
 import type { WorkflowActions, WorkflowState } from "./_workflowTypes";
 import SearchPanel from "@/components/search/SearchPanel";
+import QuestionNotices from "./_QuestionNotices";
 
 type Props = Pick<
   WorkflowState & WorkflowActions,
@@ -10,6 +11,8 @@ type Props = Pick<
   | "domain" | "cpcClass" | "keepFindings"
   | "setDomain" | "setCpcClass" | "setKeepFindings"
   | "error" | "handleBuild" | "submitting"
+  | "hasPendingQuestions" | "handleOpenQuestions" | "keysWaiting"
+  | "askQuestions" | "setAskQuestions"
 >;
 
 export default function InputPhase({
@@ -32,10 +35,20 @@ export default function InputPhase({
   error,
   handleBuild,
   submitting,
+  hasPendingQuestions,
+  handleOpenQuestions,
+  keysWaiting,
+  askQuestions,
+  setAskQuestions,
 }: Props) {
   return (
     <section className="workspace">
-      {latestRuns?.gap_run && !resumeDismissed && (
+      <QuestionNotices
+        hasPendingQuestions={hasPendingQuestions}
+        onOpen={handleOpenQuestions}
+        keysWaiting={keysWaiting}
+      />
+      {latestRuns?.gap_run && !resumeDismissed && !hasPendingQuestions && (
         <div className="workspace__resume">
           <span className="workspace__resume-text">
             You have a previous analysis from{" "}
@@ -84,6 +97,8 @@ export default function InputPhase({
         onDomainChange={setDomain}
         onCpcChange={setCpcClass}
         onKeepFindingsChange={setKeepFindings}
+        askQuestions={askQuestions}
+        onAskQuestionsChange={setAskQuestions}
       />
 
       {error && <p className="workspace__error">{error}</p>}

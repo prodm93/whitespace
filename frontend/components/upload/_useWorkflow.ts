@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useCredentials } from "@/context/CredentialsContext";
 import { orchestrate, triggerIngest } from "@/lib/api";
 import type { WorkflowActions, WorkflowState } from "./_workflowTypes";
@@ -7,9 +7,10 @@ import { buildIntent, submitSaaS } from "./_workflowUpload";
 import { useResume } from "./_useResume";
 import { useFileList } from "./_useFileList";
 import { useAnalysis } from "./_useAnalysis";
+import { useAskQuestions, useQuestions } from "./_useQuestions";
 
 export function useWorkflow(): WorkflowState & WorkflowActions {
-  const { credentials, reset: resetCredentials } = useCredentials();
+  const { credentials, reset: resetCredentials, keysWaiting } = useCredentials();
   const {
     files: profileFiles,
     add: addProfile,
@@ -29,13 +30,25 @@ export function useWorkflow(): WorkflowState & WorkflowActions {
   const [phase, setPhase] = useState<Phase>("input");
   const [jobId, setJobId] = useState("");
 
+  const [askQuestions, setAskQuestions] = useAskQuestions();
   const analysis = useAnalysis(
     domain,
     keepFindings,
     setPhase,
     setJobId,
     setError,
+    askQuestions,
   );
+  const questions = useQuestions(
+    analysis.setNeeds,
+    setPhase,
+    setJobId,
+    analysis.handleOrchestrateComplete,
+  );
+  const { refreshPending, retryOrchestrate } = questions;
+  useEffect(() => {
+    if (phase === "input") void refreshPending();
+  }, [phase, refreshPending]);
   const { latestRuns, resumeDismissed, setResumeDismissed, handleResume } =
     useResume(analysis.setNeeds, analysis.setProposals, setPhase);
 
@@ -87,7 +100,13 @@ export function useWorkflow(): WorkflowState & WorkflowActions {
 
   const handleIngestComplete = useCallback(async () => {
     try {
-      const job = await orchestrate(buildIntent(domain, keepFindings));
+      const job = await orchestrate(
+        buildIntent(domain, keepFindings),
+        [],
+        false,
+        undefined,
+        { askQuestions },
+      );
       setJobId(job.job_id);
       setPhase("orchestrating");
     } catch (err) {
@@ -96,16 +115,18 @@ export function useWorkflow(): WorkflowState & WorkflowActions {
       );
       setPhase("input");
     }
-  }, [domain, keepFindings]);
+  }, [domain, keepFindings, askQuestions]);
 
   const handleRetryIngest = useCallback(() => {
     setPhase("input");
     setJobId("");
   }, []);
   const handleRetryOrchestrate = useCallback(() => {
-    setPhase(analysis.needs.length > 0 ? "gap-results" : "input");
-    setJobId("");
-  }, [analysis.needs.length]);
+    void retryOrchestrate(() => {
+      setPhase(analysis.needs.length > 0 ? "gap-results" : "input");
+      setJobId("");
+    });
+  }, [retryOrchestrate, analysis.needs.length]);
   const goToInput = useCallback(() => {
     setPhase("input");
     setJobId("");
@@ -157,7 +178,7 @@ export function useWorkflow(): WorkflowState & WorkflowActions {
     removeDomain,
     handleBuild,
     handleIngestComplete,
-    handleOrchestrateComplete: analysis.handleOrchestrateComplete,
+    handleOrchestrateComplete: questions.handleOrchestrateComplete,
     handleIdeate: analysis.handleIdeate,
     handleFreshStart: analysis.handleFreshStart,
     handleRetryIngest,
@@ -165,5 +186,15 @@ export function useWorkflow(): WorkflowState & WorkflowActions {
     goToInput,
     goToGapResults,
     handleResume,
+    questions: questions.questions,
+    questionsEditable: questions.questionsEditable,
+    askQuestions,
+    setAskQuestions,
+    answersSubmitting: questions.answersSubmitting,
+    submitError: questions.submitError,
+    hasPendingQuestions: questions.pendingRun !== null,
+    keysWaiting,
+    handleSubmitAnswers: questions.handleSubmitAnswers,
+    handleOpenQuestions: () => questions.handleOpenQuestions(),
   };
 }

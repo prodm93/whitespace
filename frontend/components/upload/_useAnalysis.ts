@@ -23,6 +23,7 @@ export function useAnalysis(
   setPhase: (p: Phase) => void,
   setJobId: (id: string) => void,
   setError: (msg: string) => void,
+  askQuestions: boolean,
 ): AnalysisResult {
   const [needs, setNeeds] = useState<UnmetNeed[]>([]);
   const [proposals, setProposals] = useState<IdeationProposal[]>([]);
@@ -61,6 +62,9 @@ export function useAnalysis(
         const job = await orchestrate(
           "Run ideation on my selected gaps.",
           selectedTitles,
+          false,
+          undefined,
+          { askQuestions },
         );
         setJobId(job.job_id);
         setPhase("orchestrating");
@@ -72,7 +76,7 @@ export function useAnalysis(
         setIdeateSubmitting(false);
       }
     },
-    [setJobId, setPhase, setError],
+    [setJobId, setPhase, setError, askQuestions],
   );
 
   const handleFreshStart = useCallback(async () => {
@@ -81,6 +85,8 @@ export function useAnalysis(
         buildIntent(domain, keepFindings, true),
         [],
         true,
+        undefined,
+        { askQuestions },
       );
       setJobId(job.job_id);
       setPhase("orchestrating");
@@ -89,7 +95,7 @@ export function useAnalysis(
         err instanceof Error ? err.message : "Failed to start fresh.",
       );
     }
-  }, [domain, keepFindings, setJobId, setPhase, setError]);
+  }, [domain, keepFindings, setJobId, setPhase, setError, askQuestions]);
 
   return {
     needs,
