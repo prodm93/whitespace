@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 
 from whitespace.middleware.auth import CurrentUser, get_current_user
+from whitespace.orchestration._question_types import pending_view
 from whitespace.store.base import SessionStore
 
 logger = logging.getLogger(__name__)
@@ -21,11 +22,34 @@ async def latest_runs(
     re-running the pipeline.
     """
     store: SessionStore = request.app.state.store
+    pending = await _pending_questions(store)
     gap_run = await store.get_latest_gap_run()
     if gap_run is None:
-        return {"gap_run": None, "idea_runs": []}
+        return {"gap_run": None, "idea_runs": [], "pending_questions": pending}
     idea_runs = await store.list_idea_runs(gap_run.run_id)
     return {
         "gap_run": gap_run.model_dump(),
         "idea_runs": [r.model_dump() for r in idea_runs],
+        "pending_questions": pending,
+    }
+
+
+async def _pending_questions(store: SessionStore) -> dict[str, Any] | None:
+    view = await pending_view(store)
+    if view is None:
+        return None
+    return {
+        "stage": view.stage,
+        "editable": view.editable,
+        "questions": [
+            {
+                "question_id": q.question_id,
+                "question": q.question,
+                "hypothesis": q.hypothesis,
+                "rationale": q.rationale,
+                "status": q.status,
+                "answer": q.answer,
+            }
+            for q in view.questions
+        ],
     }

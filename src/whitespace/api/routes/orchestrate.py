@@ -28,6 +28,12 @@ async def trigger_orchestration(
             "intent": body.intent,
             "selected_titles": body.selected_titles,
             "fresh_start": body.fresh_start,
+            "question_answers": (
+                None
+                if body.question_answers is None
+                else [a.model_dump() for a in body.question_answers]
+            ),
+            "ask_questions": body.ask_questions,
         },
     )
     return JobResponse(job_id=job_id, status=JobStatus.PENDING)

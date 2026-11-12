@@ -1,18 +1,17 @@
 """Credential routes.
 
-* ``POST /api/credentials/parse`` — accepts a Neo4j Aura ``.txt`` upload and
+* ``POST /api/credentials/parse``: accepts a Neo4j Aura ``.txt`` upload and
   returns the parsed key/value pairs as JSON.
-* ``POST /api/credentials`` — accepts the full credential set as JSON,
-  persists to ``.env`` (0600 permissions), reloads into ``os.environ``,
-  validates connectivity, and resets cached state.
+* ``POST /api/credentials``: accepts the full credential set as JSON and
+  checks both connections with the submitted values. Credentials that pass
+  are saved to ``.env`` (mode 600) and applied at once, or kept waiting
+  while a job uses the pipeline. The same credentials again change nothing.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
-from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from neo4j import AsyncGraphDatabase
@@ -20,6 +19,7 @@ from neo4j.exceptions import ServiceUnavailable
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
+from whitespace.api.routes._credentials_env import parse_dotenv_lines
 from whitespace.api.state import app_state
 from whitespace.models.providers import OPENROUTER_BASE_URL
 
@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_CREDS_FILE_BYTES = 64 * 1024
-ENV_FILE = Path(os.environ.get("CREDS_ENV_FILE", ".env"))
 CRED_MAX = 512
 
 REQUIRED_AURA_FILE_KEYS: tuple[str, ...] = (
@@ -56,6 +55,7 @@ class CredentialsResponse(BaseModel):
     neo4j_ok: bool
     openrouter_error: str | None = None
     neo4j_error: str | None = None
+    waiting: bool = False
 
 
 @router.post("/credentials", response_model=CredentialsResponse)
@@ -88,26 +88,23 @@ async def set_credentials(payload: CredentialsPayload) -> CredentialsResponse:
         "FIRECRAWL_API_KEY": payload.firecrawl_api_key.strip(),
     }
 
-    _persist_env(pairs)
-
-    for key, value in pairs.items():
-        os.environ[key] = value
-
-    await app_state.reset()
-    logger.info("Credentials persisted to %s; state cleared", ENV_FILE)
-
     (or_ok, or_err), (n4j_ok, n4j_err) = await asyncio.gather(
         _check_openrouter(payload.openrouter_api_key.strip()),
         _check_neo4j(uri, payload.neo4j_username.strip(), payload.neo4j_password),
     )
-
-    return CredentialsResponse(
+    response = CredentialsResponse(
         status="ok",
         openrouter_ok=or_ok,
         neo4j_ok=n4j_ok,
         openrouter_error=or_err,
         neo4j_error=n4j_err,
     )
+    if not (or_ok and n4j_ok):
+        return response
+
+    outcome = await app_state.submit_credentials(pairs)
+    logger.info("Credentials submitted: %s", outcome)
+    return response.model_copy(update={"waiting": outcome == "waiting"})
 
 
 @router.post("/credentials/parse")
@@ -121,7 +118,7 @@ async def parse_credentials(file: UploadFile = File(...)) -> dict[str, str]:
     except UnicodeDecodeError as exc:
         raise HTTPException(status_code=400, detail="Credentials file must be UTF-8 text") from exc
 
-    entries = _parse_dotenv_lines(text)
+    entries = parse_dotenv_lines(text)
     missing = [k for k in REQUIRED_AURA_FILE_KEYS if k not in entries or entries[k] == ""]
     if missing:
         raise HTTPException(
@@ -137,36 +134,6 @@ async def parse_credentials(file: UploadFile = File(...)) -> dict[str, str]:
         "aura_instanceid": entries.get("AURA_INSTANCEID", ""),
         "aura_instancename": entries.get("AURA_INSTANCENAME", ""),
     }
-
-
-def _persist_env(pairs: dict[str, str]) -> None:
-    ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
-    ENV_FILE.touch(exist_ok=True)
-    os.chmod(ENV_FILE, 0o600)
-
-    existing = _parse_dotenv_lines(ENV_FILE.read_text()) if ENV_FILE.exists() else {}
-    existing.update(pairs)
-
-    lines = [f"{k}={v}" for k, v in existing.items()]
-    ENV_FILE.write_text("\n".join(lines) + "\n")
-    os.chmod(ENV_FILE, 0o600)
-
-
-def _parse_dotenv_lines(text: str) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if line == "" or line.startswith("#"):
-            continue
-        eq = line.find("=")
-        if eq == -1:
-            continue
-        key = line[:eq].strip().upper()
-        value = line[eq + 1 :].strip()
-        if key == "":
-            continue
-        out[key] = value
-    return out
 
 
 async def _check_openrouter(api_key: str) -> tuple[bool, str | None]:
