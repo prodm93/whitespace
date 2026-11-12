@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 
+from whitespace.agents.council._answer_prompts import IDEA_REFINE_FORMAT, IDEA_REFINE_PROMPT
+from whitespace.agents.council._answer_refinement import Refined, request_refinement
 from whitespace.agents.council._helpers import format_needs, format_profile
 from whitespace.agents.council._idea_prompts import (
     IDEA_REVISIONS_FORMAT,
@@ -135,3 +137,50 @@ class IdeaIdeator:
             )
             for (original, _), item in zip(flagged, items, strict=False)
         ]
+
+    async def refine(
+        self,
+        own: list[CandidateIdea],
+        answers_text: str,
+        context: str,
+        profile: ProfessionalProfile,
+        *,
+        allow_queries: bool,
+        valid_keys: set[str],
+    ) -> Refined[CandidateIdea]:
+        """Revise and extend this ideator's own ideas from the user's answers; no search."""
+        out = await request_refinement(
+            self._router,
+            role=self._role_name,
+            system_prompt=IDEA_REFINE_PROMPT,
+            response_format=IDEA_REFINE_FORMAT,
+            response_key="ideas",
+            new_key="new_ideas",
+            own=own,
+            answers_text=answers_text,
+            context=context,
+            profile=profile,
+            allow_queries=False,
+            valid_keys=valid_keys,
+        )
+        revised = [
+            CandidateIdea(
+                title=item["title"],
+                description=item["description"],
+                source_model=out.model_id,
+                candidate_id=original.candidate_id,
+                source_role=original.source_role,
+            )
+            for original, item in zip(own, out.items, strict=False)
+        ] + own[len(out.items) :]
+        added = [
+            CandidateIdea(
+                title=item["title"],
+                description=item["description"],
+                source_model=out.model_id,
+                candidate_id=f"{self._role_name}-a{n}",
+                source_role=self._role_name,
+            )
+            for n, item in enumerate(out.new_items, start=1)
+        ]
+        return Refined(revised=revised, added=added)

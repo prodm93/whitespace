@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import cast
 
 from whitespace.agents.council._gap_prompts import _GAPS_SCHEMA
 from whitespace.agents.council._idea_prompts import _IDEAS_SCHEMA
+from whitespace.schemas.critique import CandidateLike
 from whitespace.schemas.question import QuestionRecord, UserAnswer
 
 GAP_REFINE_PROMPT = """\
@@ -124,3 +125,29 @@ def answered_keys(records: list[QuestionRecord], answers: list[UserAnswer]) -> s
         for index, record in enumerate(records, start=1)
         if record.question_id in answered
     }
+
+
+def with_answers(text: str, state: Mapping[str, object]) -> str:
+    """The text followed by the USER ANSWERS section, when the state has answers."""
+    section = answers_section(state)
+    return f"{text}\n\n{section}" if section else text
+
+
+def refine_targets(
+    records: list[QuestionRecord],
+    answers: list[UserAnswer],
+    pool: Sequence[CandidateLike],
+    roles: list[str],
+) -> list[str]:
+    """Roles to refine: every role for a clarify answer, the owner for an unlock answer."""
+    answered = {a.question_id for a in answers if a.status == "answered"}
+    owners = {c.candidate_id: c.source_role for c in pool}
+    targets: set[str] = set()
+    for record in records:
+        if record.question_id not in answered:
+            continue
+        if record.purpose == "clarify":
+            targets.update(roles)
+        elif record.related_candidate_id in owners:
+            targets.add(owners[record.related_candidate_id])
+    return [role for role in roles if role in targets]
