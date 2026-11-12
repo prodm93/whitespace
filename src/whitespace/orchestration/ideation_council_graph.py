@@ -1,38 +1,50 @@
-"""LangGraph for ideation: fan-out → novelty filter → critic loop → synthesis."""
+"""LangGraph for ideation in two halves: ideas and questions, then answers and judgment."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
 
-from whitespace.agents.council._question_proposals import resolve_question_candidate_ids
 from whitespace.agents.council.idea_critic import IdeaCritic
 from whitespace.agents.council.idea_ideator import IdeaIdeator
 from whitespace.agents.council.idea_synthesiser import IdeaSynthesiser
 from whitespace.agents.council.prior_art_agent import PriorArtAgent
-from whitespace.orchestration._council_common import (
-    assign_candidate_ids,
-    collect_batches,
-    resolve_final,
-    run_targeted_revision,
-    should_revise,
+from whitespace.agents.council.question_gate import QuestionGate
+from whitespace.orchestration._council_common import should_revise
+from whitespace.orchestration._ideation_answer_stage import run_ideation_refine_node
+from whitespace.orchestration._ideation_council_state import (
+    IdeationCouncilState,
+    build_initial_ideation_state,
 )
-from whitespace.orchestration._ideation_council_state import IdeationCouncilState
+from whitespace.orchestration._ideation_critique_phase import (
+    run_ideation_critic_node,
+    run_ideation_revision_node,
+    run_ideation_synth_node,
+)
+from whitespace.orchestration._ideation_generation_phase import (
+    run_ideation_question_gate_node,
+    run_ideators_node,
+    run_novelty_node,
+)
 from whitespace.schemas.gap import UnmetNeed
-from whitespace.schemas.idea import CandidateIdea, IdeationProposal
+from whitespace.schemas.idea import IdeationProposal
 from whitespace.schemas.profile import ProfessionalProfile
+from whitespace.schemas.question import UserAnswer
+from whitespace.tools.dedup import SemanticDeduplicator
 
 logger = logging.getLogger(__name__)
 
 
 class IdeationCouncilGraph:
-    """Fan-out ideators → ideator-driven novelty filter → critic → synthesis.
+    """Fan-out ideators, ideator-driven novelty check, critic and synthesis.
 
     Novelty is checked by the ideators themselves: each hunts duplicates
     of its own ideas via the prior-art agent and decides modify or drop,
     with automatic discard of remaining (semi-)duplicates after the cap.
+    The first half can end with questions for the user; the second half
+    starts from their answers.
     """
 
     def __init__(
@@ -41,23 +53,37 @@ class IdeationCouncilGraph:
         critic: IdeaCritic,
         synthesiser: IdeaSynthesiser,
         prior_art_agent: PriorArtAgent,
+        dedup: SemanticDeduplicator,
+        question_gate: QuestionGate | None = None,
     ) -> None:
         self._ideators = {i.role_name: i for i in ideators}
         self._critic = critic
         self._synthesiser = synthesiser
         self._prior_art = prior_art_agent
-        self._compiled = self._build()
+        self._dedup = dedup
+        self._question_gate = question_gate
+        self._first_half = self._build_first_half()
+        self._second_half = self._build_second_half()
 
-    def _build(self) -> Any:
+    def _build_first_half(self) -> Any:
         builder = StateGraph(IdeationCouncilState)
         builder.add_node("fan_out_ideators", self._run_ideators)
         builder.add_node("novelty", self._run_novelty)
-        builder.add_node("revise", self._run_revision)
-        builder.add_node("critic", self._run_critic)
-        builder.add_node("synthesiser", self._run_synthesiser)
+        builder.add_node("question_gate_node", self._run_question_gate)
         builder.set_entry_point("fan_out_ideators")
         builder.add_edge("fan_out_ideators", "novelty")
-        builder.add_edge("novelty", "critic")
+        builder.add_edge("novelty", "question_gate_node")
+        builder.add_edge("question_gate_node", END)
+        return builder.compile()
+
+    def _build_second_half(self) -> Any:
+        builder = StateGraph(IdeationCouncilState)
+        builder.add_node("refine_with_answers", self._run_refine)
+        builder.add_node("critic", self._run_critic)
+        builder.add_node("revise", self._run_revision)
+        builder.add_node("synthesiser", self._run_synthesiser)
+        builder.set_entry_point("refine_with_answers")
+        builder.add_edge("refine_with_answers", "critic")
         builder.add_conditional_edges(
             "critic",
             self._route_after_critic,
@@ -73,76 +99,49 @@ class IdeationCouncilGraph:
         graph_context: str,
         profile: ProfessionalProfile,
     ) -> tuple[list[IdeationProposal], list[dict[str, str]]]:
-        """Execute the council; returns (proposals, discarded candidates)."""
+        """Execute the council with questions off; returns (proposals, discarded candidates)."""
         logger.info(
             "IdeationCouncilGraph: starting with %d needs, %d ideators",
             len(selected_needs),
             len(self._ideators),
         )
-        initial_state: IdeationCouncilState = {
-            "selected_needs": selected_needs,
-            "profile": profile,
-            "graph_context": graph_context,
-        }
-        final_state = await self._compiled.ainvoke(initial_state)
-        proposals: list[IdeationProposal] = final_state.get("final_proposals", [])
-        return proposals, final_state.get("discards", [])
+        initial = build_initial_ideation_state(
+            selected_needs,
+            profile,
+            graph_context,
+            run_id="",
+            gap_run_id="",
+            domain="",
+            questions_enabled=False,
+            prior_idea_texts=[],
+        )
+        return await self.run_second_half(await self.run_first_half(initial))
+
+    async def run_first_half(self, initial: IdeationCouncilState) -> IdeationCouncilState:
+        """Generate and novelty-check ideas; return them with any questions to ask."""
+        return cast(IdeationCouncilState, await self._first_half.ainvoke(initial))
+
+    async def run_second_half(
+        self, state: IdeationCouncilState, answers: list[UserAnswer] | None = None
+    ) -> tuple[list[IdeationProposal], list[dict[str, str]]]:
+        """Refine with the answers, then critique, revise and synthesise the pool."""
+        if answers is not None:
+            state = {**state, "user_answers": answers}
+        final_state = await self._second_half.ainvoke(state)
+        proposals = cast(list[IdeationProposal], final_state.get("final_proposals", []))
+        return proposals, cast(list[dict[str, str]], final_state.get("discards", []))
 
     async def _run_ideators(self, state: IdeationCouncilState) -> dict[str, Any]:
-        roles = list(self._ideators)
-        tasks = [
-            self._ideators[role].run(
-                state["selected_needs"], state["graph_context"], state["profile"]
-            )
-            for role in roles
-        ]
-        batches = await collect_batches(roles, tasks, "IdeationCouncilGraph")
-        pool = assign_candidate_ids([(role, output.ideas) for role, output in batches])
-        logger.info(
-            "IdeationCouncilGraph: %d/%d ideators succeeded (%d candidates)",
-            len(batches),
-            len(roles),
-            len(pool),
-        )
-        return {
-            "candidates": pool,
-            "proposed_questions": resolve_question_candidate_ids(
-                [question for _, output in batches for question in output.proposed_questions],
-                pool,
-            ),
-            "report": None,
-            "revision_round": 0,
-        }
+        return await run_ideators_node(self._ideators, state)
 
     async def _run_novelty(self, state: IdeationCouncilState) -> dict[str, Any]:
-        """Each ideator novelty-checks its own ideas and prunes duplicates."""
-        by_role: dict[str, list[CandidateIdea]] = {}
-        for candidate in state["candidates"]:
-            by_role.setdefault(candidate.source_role, []).append(candidate)
-        roles = [role for role in by_role if role in self._ideators]
-        tasks = [
-            self._ideators[role].novelty_filter(by_role[role], self._prior_art) for role in roles
-        ]
-        batches = await collect_batches(roles, tasks, "IdeationCouncilGraph.novelty")
-        survivors = [c for _, (kept, _) in batches for c in kept]
-        discards = [
-            {
-                "title": c.title,
-                "description": c.description,
-                "reason": "identified (semi-)duplicate during novelty check",
-            }
-            for _, (_, dropped) in batches
-            for c in dropped
-        ]
-        logger.info(
-            "IdeationCouncilGraph: novelty filter kept %d/%d candidates",
-            len(survivors),
-            len(state["candidates"]),
-        )
-        return {
-            "candidates": survivors,
-            "discards": discards,
-        }
+        return await run_novelty_node(self._ideators, self._prior_art, state)
+
+    async def _run_question_gate(self, state: IdeationCouncilState) -> dict[str, Any]:
+        return await run_ideation_question_gate_node(self._question_gate, state)
+
+    async def _run_refine(self, state: IdeationCouncilState) -> dict[str, Any]:
+        return await run_ideation_refine_node(self._ideators, self._dedup, self._prior_art, state)
 
     def _route_after_critic(self, state: IdeationCouncilState) -> str:
         """Conditional edge driven by the critic's own verdicts."""
@@ -151,43 +150,10 @@ class IdeationCouncilGraph:
         return "synthesiser"
 
     async def _run_critic(self, state: IdeationCouncilState) -> dict[str, Any]:
-        report = await self._critic.run(
-            state["candidates"], state["profile"], evidence=state["graph_context"]
-        )
-        return {"report": report}
+        return await run_ideation_critic_node(self._critic, state)
 
     async def _run_revision(self, state: IdeationCouncilState) -> dict[str, Any]:
-        report = state["report"]
-        assert report is not None  # only reachable via _route_after_critic
-        contexts = {role: state["graph_context"] for role in self._ideators}
-        pool = await run_targeted_revision(
-            {role: agent.revise for role, agent in self._ideators.items()},
-            report,
-            state["candidates"],
-            contexts,
-            state["profile"],
-            "IdeationCouncilGraph",
-        )
-        return {"candidates": pool, "revision_round": state["revision_round"] + 1}
+        return await run_ideation_revision_node(self._ideators, state)
 
     async def _run_synthesiser(self, state: IdeationCouncilState) -> dict[str, Any]:
-        report = state["report"]
-        assert report is not None  # critic always precedes synthesis
-        resolved = resolve_final(report)
-        by_id = {c.candidate_id: c for c in state["candidates"]}
-        kills = [
-            {
-                "title": by_id[a.candidate_id].title,
-                "description": by_id[a.candidate_id].description,
-                "reason": a.objections or "killed by council critic",
-            }
-            for a in resolved.assessments
-            if a.verdict == "kill" and a.candidate_id in by_id
-        ]
-        proposals = await self._synthesiser.run(
-            state["candidates"], resolved, state["graph_context"], state["profile"]
-        )
-        return {
-            "final_proposals": proposals,
-            "discards": state.get("discards", []) + kills,
-        }
+        return await run_ideation_synth_node(self._synthesiser, state)

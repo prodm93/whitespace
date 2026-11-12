@@ -104,6 +104,40 @@ def _build_pipeline(
     if config.mode == "byok" and config.gap_snapshot_dir:
         snapshot_writer = GapSnapshotWriter(Path(config.gap_snapshot_dir))
 
+    question_gate = None
+    if config.mode == "byok" and session_store is not None:
+        from whitespace.agents.council.question_gate import QuestionGate
+
+        question_gate = QuestionGate(config, router, dedup, session_store)
+    gap_council = GapCouncilGraph(
+        gap_identifiers,
+        GapCritic(config, router),
+        GapSynthesiser(config, router),
+        ResearchStage(prior_art, dedup, Normaliser(), ingest_graph, store=session_store),
+        question_gate=question_gate,
+        snapshot_writer=snapshot_writer,
+    )
+    ideation_council = IdeationCouncilGraph(
+        idea_ideators,
+        IdeaCritic(config, router),
+        IdeaSynthesiser(config, router),
+        prior_art,
+        dedup,
+        question_gate=question_gate,
+    )
+    question_runs = None
+    if question_gate is not None and session_store is not None:
+        from whitespace.orchestration._council_halves import GapHalves, IdeationHalves
+        from whitespace.orchestration._question_pause import QuestionPauseShell
+        from whitespace.orchestration._question_runs import QuestionRuns
+
+        question_runs = QuestionRuns(
+            session_store,
+            QuestionPauseShell(config.question_checkpoint_db_path),
+            GapHalves(gap_council),
+            IdeationHalves(ideation_council),
+        )
+
     return cls(
         config=config,
         neo4j=neo4j,
@@ -111,21 +145,11 @@ def _build_pipeline(
         context_agent=context_agent,
         profile_agent=profile_agent,
         ingest_graph=ingest_graph,
-        gap_council=GapCouncilGraph(
-            gap_identifiers,
-            GapCritic(config, router),
-            GapSynthesiser(config, router),
-            ResearchStage(prior_art, dedup, Normaliser(), ingest_graph, store=session_store),
-            snapshot_writer=snapshot_writer,
-        ),
-        ideation_council=IdeationCouncilGraph(
-            idea_ideators,
-            IdeaCritic(config, router),
-            IdeaSynthesiser(config, router),
-            prior_art,
-        ),
+        gap_council=gap_council,
+        ideation_council=ideation_council,
         query_graph=QueryGraph(context_agent, generator),
         router=router,
         dedup=dedup,
         session_store=session_store,
+        question_runs=question_runs,
     )

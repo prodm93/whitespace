@@ -13,7 +13,7 @@ from typing import Any, TypeVar
 from whitespace.agents.council.prior_art_agent import PriorArtAgent
 from whitespace.orchestration._prior_output_gate import gate_against_prior
 from whitespace.orchestration.ingest_graph import IngestGraph
-from whitespace.schemas.critique import CandidateLike, CriticReport
+from whitespace.schemas.critique import CandidateLike
 from whitespace.schemas.research import RawFinding
 from whitespace.store.base import SessionStore
 from whitespace.tools.dedup import SemanticDeduplicator
@@ -49,14 +49,18 @@ class RunMemory:
         return cls(**{**data, "prior_findings": findings})
 
 
+def format_finding_line(index: int, finding: RawFinding) -> str:
+    """One dated finding of the raw-evidence channel, keyed [F{index}]."""
+    return (
+        f"- [F{index}] [{finding.source_type}] {finding.title}"
+        f" ({finding.published or 'n.d.'}; found {finding.found_at:%Y-%m-%d};"
+        f" query: {finding.query}): {finding.content[:400]}"
+    )
+
+
 def format_findings(findings: list[RawFinding]) -> str:
     """Render dated findings with stable [F{i}] keys for the raw-evidence channel."""
-    lines = [
-        f"- [F{i}] [{f.source_type}] {f.title}"
-        f" ({f.published or 'n.d.'}; found {f.found_at:%Y-%m-%d}; query: {f.query}):"
-        f" {f.content[:400]}"
-        for i, f in enumerate(findings, 1)
-    ]
+    lines = [format_finding_line(i, f) for i, f in enumerate(findings, 1)]
     joined = "\n".join(lines)
     if not joined:
         return "(no research findings)"
@@ -138,28 +142,6 @@ class ResearchStage:
             await self.record_discards(run_id, kind, kill_items, domain)
             logger.info("ResearchStage: gated %d cross-run duplicates", len(kill_items))
         return kept, flags
-
-    async def record_kills(
-        self,
-        report: CriticReport,
-        pool: list[C],
-        run_id: str,
-        kind: str,
-        domain: str = "",
-    ) -> None:
-        """Persist critic kills with their objections so reruns avoid them."""
-        by_id = {c.candidate_id: c for c in pool}
-        items = [
-            {
-                "title": by_id[a.candidate_id].title,
-                "description": by_id[a.candidate_id].description,
-                "reason": a.objections or "killed by council critic",
-                "domain": domain,
-            }
-            for a in report.assessments
-            if a.verdict == "kill" and a.candidate_id in by_id
-        ]
-        await self.record_discards(run_id, kind, items, domain)
 
     async def record_discards(
         self, run_id: str, kind: str, items: list[dict[str, str]], domain: str = ""

@@ -98,7 +98,7 @@ async def test_writer_swallows_write_failure(tmp_path: Path) -> None:
 
 
 async def test_run_saves_one_snapshot_when_writer_present(tmp_path: Path) -> None:
-    needs = await _graph(GapSnapshotWriter(tmp_path)).run(
+    needs, _ = await _graph(GapSnapshotWriter(tmp_path)).run(
         ProfessionalProfile(), "energy", run_id="run-7"
     )
 
@@ -112,7 +112,7 @@ async def test_run_completes_when_snapshot_fails(tmp_path: Path) -> None:
     blocker = tmp_path / "not-a-directory"
     blocker.write_text("x", encoding="utf-8")
 
-    needs = await _graph(GapSnapshotWriter(blocker)).run(ProfessionalProfile(), "energy")
+    needs, _ = await _graph(GapSnapshotWriter(blocker)).run(ProfessionalProfile(), "energy")
 
     assert [need.title for need in needs] == ["Heat recovery"]
 

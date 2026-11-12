@@ -13,7 +13,11 @@ from whitespace.agents.council.gap_identifier import GapIdentifier
 from whitespace.agents.council.gap_synthesiser import GapSynthesiser
 from whitespace.agents.council.question_gate import QuestionGate
 from whitespace.orchestration._council_common import should_revise
-from whitespace.orchestration._gap_council_state import GapCouncilState
+from whitespace.orchestration._gap_answer_stage import run_refine_node
+from whitespace.orchestration._gap_council_state import (
+    GapCouncilState,
+    build_initial_gap_state,
+)
 from whitespace.orchestration._gap_critique_phase import (
     run_critic_node,
     run_revision_node,
@@ -29,6 +33,7 @@ from whitespace.orchestration._gap_snapshot import GapSnapshotWriter
 from whitespace.orchestration._research_stage import ResearchStage, RunMemory
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.profile import ProfessionalProfile
+from whitespace.schemas.question import UserAnswer
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +75,14 @@ class GapCouncilGraph:
     def _build_second_half(self) -> Any:
         builder = StateGraph(GapCouncilState)
         for name, fn in [
+            ("refine_with_answers", self._run_refine),
             ("critic", self._run_critic),
             ("revise", self._run_revision),
             ("synthesiser", self._run_synthesiser),
         ]:
             builder.add_node(name, fn)
-        builder.set_entry_point("critic")
+        builder.set_entry_point("refine_with_answers")
+        builder.add_edge("refine_with_answers", "critic")
         builder.add_conditional_edges(
             "critic",
             self._route_after_critic,
@@ -94,30 +101,39 @@ class GapCouncilGraph:
         keep_findings: bool = False,
         run_id: str | None = None,
         run_memory: RunMemory | None = None,
-    ) -> list[UnmetNeed]:
-        initial_state: GapCouncilState = {
-            "domain": domain,
-            "profile": profile,
-            "doc_paths": doc_paths or [],
-            "keep_findings": keep_findings,
-            "run_id": run_id or str(uuid.uuid4()),
-            "run_memory": run_memory or RunMemory(),
-        }
-        mid_state = await self.run_first_half(initial_state)
-        if self._snapshot_writer is not None:
-            await self._snapshot_writer.save(mid_state)
-        if mid_state.get("pending_questions"):
-            raise RuntimeError("run() cannot pause for questions; call the halves directly")
-        return await self.run_second_half(mid_state)
+    ) -> tuple[list[UnmetNeed], list[dict[str, str]]]:
+        initial = build_initial_gap_state(
+            profile,
+            domain,
+            doc_paths,
+            keep_findings=keep_findings,
+            run_id=run_id or str(uuid.uuid4()),
+            run_memory=run_memory or RunMemory(),
+            questions_enabled=False,
+        )
+        return await self.run_second_half(await self.run_first_half(initial))
 
     async def run_first_half(self, initial: GapCouncilState) -> GapCouncilState:
         """Research the domain and return candidates, evidence and any questions to ask."""
-        return cast(GapCouncilState, await self._first_half.ainvoke(initial))
+        mid_state = cast(GapCouncilState, await self._first_half.ainvoke(initial))
+        if self._snapshot_writer is not None:
+            await self._snapshot_writer.save(mid_state)
+        return mid_state
 
-    async def run_second_half(self, state: GapCouncilState) -> list[UnmetNeed]:
-        """Critique, revise, and synthesise an existing candidate pool."""
+    async def run_second_half(
+        self, state: GapCouncilState, answers: list[UserAnswer] | None = None
+    ) -> tuple[list[UnmetNeed], list[dict[str, str]]]:
+        """Refine with the answers, critique, revise and synthesise; store nothing.
+
+        Returns the needs and the final discards (the critic's kills plus the
+        held discards). Storing them is the caller's job.
+        """
+        if answers is not None:
+            state = {**state, "user_answers": answers}
         final_state = await self._second_half.ainvoke(state)
-        return cast(list[UnmetNeed], final_state.get("synthesised_needs", []))
+        needs = cast(list[UnmetNeed], final_state.get("synthesised_needs", []))
+        discards = cast(list[dict[str, str]], final_state.get("final_discards", []))
+        return needs, discards
 
     async def _run_craft_queries(self, state: GapCouncilState) -> dict[str, Any]:
         return await run_craft_queries_node(self._identifiers, state)
@@ -129,12 +145,17 @@ class GapCouncilGraph:
         return await run_identifiers_node(self._identifiers, self._research, state)
 
     async def _run_question_gate(self, state: GapCouncilState) -> dict[str, Any]:
+        if state.get("questions_enabled") is not True:
+            return {"pending_questions": []}
         dedup = self._research.deduplicator
         return await run_question_gate_node(self._question_gate, dedup, state)
 
     def _route_after_critic(self, state: GapCouncilState) -> str:
         rd, rr = state["report"], state["revision_round"]
         return "revise" if should_revise(rd, rr) else "synthesiser"
+
+    async def _run_refine(self, state: GapCouncilState) -> dict[str, Any]:
+        return await run_refine_node(self._identifiers, self._research, state)
 
     async def _run_critic(self, state: GapCouncilState) -> dict[str, Any]:
         return await run_critic_node(self._identifiers, self._critic, self._research, state)

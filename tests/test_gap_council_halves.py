@@ -116,7 +116,7 @@ async def test_second_half_uses_supplied_state_without_research(council: Council
         [council.identifier], council.critic, council.synthesiser, council.research
     )
 
-    assert await restored.run_second_half(state) == [council.need]
+    assert await restored.run_second_half(state) == ([council.need], [])
 
     council.identifier.craft_queries.assert_awaited_once()
     council.identifier.run.assert_awaited_once()
@@ -126,7 +126,7 @@ async def test_second_half_uses_supplied_state_without_research(council: Council
     evidence = council.critic.run.call_args.kwargs["evidence"]
     assert "Graph evidence" in evidence
     assert "near prior work" in evidence
-    council.research.record_kills.assert_awaited_once()
+    council.research.record_discards.assert_not_awaited()
 
 
 @pytest.mark.parametrize("split", [False, True])
@@ -137,9 +137,9 @@ async def test_composed_council_keeps_revision_limit(
     council.critic.run.return_value = _report(verdict)
     if split:
         state = await council.graph.run_first_half(council.initial)
-        result = await council.graph.run_second_half(state)
+        result, discards = await council.graph.run_second_half(state)
     else:
-        result = await council.graph.run(
+        result, discards = await council.graph.run(
             council.initial["profile"],
             council.initial["domain"],
             council.initial["doc_paths"],
@@ -149,6 +149,7 @@ async def test_composed_council_keeps_revision_limit(
         )
 
     assert result == [council.need]
+    assert discards == []
     assert council.critic.run.await_count == revisions + 1
     assert council.identifier.revise.await_count == revisions
     council.identifier.run.assert_awaited_once()
@@ -158,7 +159,7 @@ async def test_composed_council_keeps_revision_limit(
     assert resolved.ranking == ["gap_identifier_1-1"]
 
 
-async def test_run_refuses_to_continue_past_pending_questions(council: Council) -> None:
+def _asking_gate(council: Council) -> tuple[MagicMock, QuestionRecord]:
     gate = MagicMock(spec=QuestionGate)
     record = QuestionRecord(
         question_id="q-1",
@@ -174,13 +175,40 @@ async def test_run_refuses_to_continue_past_pending_questions(council: Council) 
     )
     gate.judge = AsyncMock(return_value=GateDecision(ask=True, questions=[record], reasoning=""))
     council.research.deduplicator.similarity_matrix = AsyncMock(return_value=[[1.0]])
+    return gate, record
+
+
+async def test_first_half_with_questions_on_returns_the_asked_question(council: Council) -> None:
+    gate, record = _asking_gate(council)
+    graph = GapCouncilGraph(
+        [council.identifier], council.critic, council.synthesiser, council.research, gate
+    )
+
+    state = await graph.run_first_half({**council.initial, "questions_enabled": True})
+
+    assert state["pending_questions"] == [record]
+
+
+async def test_first_half_without_the_switch_does_not_ask(council: Council) -> None:
+    gate, _ = _asking_gate(council)
     graph = GapCouncilGraph(
         [council.identifier], council.critic, council.synthesiser, council.research, gate
     )
 
     state = await graph.run_first_half(council.initial)
-    assert state["pending_questions"] == [record]
 
-    with pytest.raises(RuntimeError):
-        await graph.run(council.initial["profile"], council.initial["domain"])
-    council.critic.run.assert_not_awaited()
+    gate.judge.assert_not_awaited()
+    assert state["pending_questions"] == []
+
+
+async def test_run_with_a_gate_returns_needs_without_asking(council: Council) -> None:
+    gate, _ = _asking_gate(council)
+    graph = GapCouncilGraph(
+        [council.identifier], council.critic, council.synthesiser, council.research, gate
+    )
+
+    needs, _ = await graph.run(council.initial["profile"], council.initial["domain"])
+
+    assert needs == [council.need]
+    gate.judge.assert_not_awaited()
+    council.critic.run.assert_awaited()

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from typing import Any
 
+from whitespace.agents.council._answer_prompts import with_answers
 from whitespace.agents.council.gap_critic import GapCritic
 from whitespace.agents.council.gap_identifier import GapIdentifier
 from whitespace.agents.council.gap_synthesiser import GapSynthesiser
@@ -21,7 +23,7 @@ from whitespace.orchestration._trail_rendering import (
     build_gap_references,
     render_trail,
 )
-from whitespace.schemas.critique import CandidateLike
+from whitespace.schemas.critique import CandidateLike, CriticReport
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +46,12 @@ async def run_critic_node(
         by_role,
         research.deduplicator,
     )
-    evidence = (
-        state["findings_text"] + build_flag_evidence(state.get("gate_flags", {})) + exploration
-    )[:_MAX_EVIDENCE_CHARS]
+    evidence = with_answers(
+        (state["findings_text"] + build_flag_evidence(state.get("gate_flags", {})) + exploration)[
+            :_MAX_EVIDENCE_CHARS
+        ],
+        state,
+    )
     report = await critic.run(state["candidates"], state["profile"], evidence=evidence)
     return {"report": report}
 
@@ -74,7 +79,9 @@ async def run_revision_node(
             for r in roles
         ]
     )
-    contexts = {r: findings_prefix + t for r, t in zip(roles, trails, strict=True)}
+    contexts = {
+        r: with_answers(findings_prefix + t, state) for r, t in zip(roles, trails, strict=True)
+    }
     pool = await run_targeted_revision(
         {role: agent.revise for role, agent in identifiers.items()},
         report,
@@ -91,12 +98,13 @@ async def run_synth_node(
     research: ResearchStage,
     state: GapCouncilState,
 ) -> dict[str, Any]:
-    """Write up the surviving candidates as UnmetNeed reports."""
+    """Write up the surviving candidates; return them with every rejection, storing nothing.
+
+    The final discards are the critic's kills plus the held discards of the
+    refine step. They are built only after the synthesis succeeded.
+    """
     assert (report := state["report"]) is not None
     resolved = resolve_final(report)
-    await research.record_kills(
-        resolved, state["candidates"], state["run_id"], "gap", state["domain"]
-    )
     surviving_ids = set(resolved.ranking)
     surv: list[CandidateLike] = [c for c in state["candidates"] if c.candidate_id in surviving_ids]
     surv_roles = {c.source_role for c in surv}
@@ -106,6 +114,27 @@ async def run_synth_node(
         {role: surv for role in surv_roles},
         research.deduplicator,
     )
-    evidence = (state["findings_text"] + exploration)[:_MAX_EVIDENCE_CHARS]
+    evidence = with_answers((state["findings_text"] + exploration)[:_MAX_EVIDENCE_CHARS], state)
     needs = await synthesiser.run(state["candidates"], resolved, evidence, state["profile"])
-    return {"synthesised_needs": needs}
+    kills = build_kill_items(resolved, state["candidates"], state["domain"])
+    return {
+        "synthesised_needs": needs,
+        "final_discards": kills + state.get("held_discards", []),
+    }
+
+
+def build_kill_items(
+    report: CriticReport, pool: Sequence[CandidateLike], domain: str
+) -> list[dict[str, str]]:
+    """One discard item for each candidate in the pool that the critic killed."""
+    by_id = {c.candidate_id: c for c in pool}
+    return [
+        {
+            "title": by_id[a.candidate_id].title,
+            "description": by_id[a.candidate_id].description,
+            "reason": a.objections or "killed by council critic",
+            "domain": domain,
+        }
+        for a in report.assessments
+        if a.verdict == "kill" and a.candidate_id in by_id
+    ]
