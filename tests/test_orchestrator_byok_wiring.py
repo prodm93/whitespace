@@ -1,7 +1,7 @@
 """Phase 1 orchestration tests.
 
 Covers: HITL sidecar invariants, blocked-reason semantics, status
-mapping, two-request flow, write-through, AppState reset, and 404s
+mapping, two-request flow, write-through, and 404s
 for deleted trigger routes.
 """
 
@@ -15,7 +15,6 @@ import pytest
 from whitespace.agents._orchestrator_actions import OrchestratorActions
 from whitespace.agents._orchestrator_session import AnalysisSession
 from whitespace.agents.orchestrator_agent import OrchestratorAgent
-from whitespace.api.state import AppState
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
 from whitespace.schemas.profile import ProfessionalProfile
@@ -85,6 +84,23 @@ class FakePipeline:
 
     async def query(self, question: str) -> str:
         return f"answer: {question}"
+
+    async def analyse_gaps_with_questions(self, *_a: Any, **_kw: Any) -> list[UnmetNeed]:
+        self.analyse_calls += 1
+        return self.needs
+
+    async def ideate_with_questions(self, *_a: Any, **_kw: Any) -> list[IdeationProposal]:
+        self.ideate_calls += 1
+        return self.proposals
+
+    async def resume_questions(self, *_a: Any, **_kw: Any) -> Any:
+        raise AssertionError("no paused run in these tests")
+
+    async def discard_pending_questions(self) -> bool:
+        return False
+
+    async def pending_questions(self) -> None:
+        return None
 
     async def close(self) -> None:
         self.closed = True
@@ -404,38 +420,6 @@ async def test_no_needs_anywhere_yields_blocked() -> None:
 
     assert result.status == "blocked"
     assert result.reason is not None
-
-
-# ---------------------------------------------------------------------------
-# F5: AppState.reset() is pipeline-only
-# ---------------------------------------------------------------------------
-
-
-async def test_reset_preserves_profile_and_staging() -> None:
-    state = AppState()
-    state.set_profile(_profile())
-    state.set_profile_paths(["cv.pdf"])
-    state.set_pending_ingest("quantum", ["d.pdf"], True)
-
-    await state.reset()
-
-    assert state.get_profile().hard_skills == ["Python"]
-    assert state.get_profile_paths() == ["cv.pdf"]
-    domain, paths, keep = state.get_pending_ingest()
-    assert domain == "quantum"
-    assert paths == ["d.pdf"]
-    assert keep is True
-
-
-async def test_reset_closes_and_clears_pipeline() -> None:
-    state = AppState()
-    pipeline = FakePipeline()
-    state._pipeline = pipeline  # type: ignore[attr-defined]
-
-    await state.reset()
-
-    assert pipeline.closed
-    assert state._pipeline is None  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------

@@ -42,6 +42,9 @@ Tools:
                          user-selected gaps. Never select gaps yourself.
   query_knowledge_graph(question) -- answer a question from the graph;
                          use for all queries, no new analysis run needed.
+  submit_question_answers -- continue a run that is waiting for the user's
+                         answers. Takes no arguments; the answers come from
+                         the user's form, never from you.
 
 Hard rules:
 - Gap selection belongs to the HUMAN. If gap analysis is complete, stop.
@@ -52,6 +55,10 @@ Hard rules:
   is non-empty; the tool enforces this.
 - run_gap_analysis runs at most once per job; a second call returns the
   cached result.
+- If a tool reports that the analysis paused with questions for the user,
+  stop at once. Do not answer the questions yourself and do not call
+  another tool. If get_status shows answers waiting to be submitted, call
+  submit_question_answers and nothing before it.
 - If a prerequisite is missing, stop and state exactly what is needed.
   Do not invent workarounds.
 - Blocked outcomes surface as reason text in the result; do not repeat
@@ -77,7 +84,9 @@ class OrchestratorAgent:
             temperature=0.2,
         )
         session = actions.session
-        if session.proposals:
+        if session.pending_questions:
+            status = "awaiting_answers"
+        elif session.proposals:
             status = "done"
         elif session.blocked_reason:
             status = "blocked"
@@ -91,6 +100,8 @@ class OrchestratorAgent:
             needs=session.needs,
             proposals=session.proposals,
             reason=session.blocked_reason,
+            questions=session.pending_questions,
+            stage=session.pending_stage,
         )
 
 

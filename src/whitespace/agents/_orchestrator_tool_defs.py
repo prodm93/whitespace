@@ -6,6 +6,14 @@ _EMPTY: dict[str, Any] = {"type": "object", "properties": {}}
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
+        "name": "submit_question_answers",
+        "description": (
+            "Continue a paused run with the answers the user gave in the "
+            "question form. Takes no arguments. Never write answers yourself."
+        ),
+        "parameters": _EMPTY,
+    },
+    {
         "name": "get_status",
         "description": (
             "What the session currently holds: profile readiness, staged domain "

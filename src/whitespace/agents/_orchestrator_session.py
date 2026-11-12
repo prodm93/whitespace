@@ -8,6 +8,7 @@ from typing import Protocol
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
 from whitespace.schemas.profile import ProfessionalProfile
+from whitespace.schemas.question import QuestionRecord, UserAnswer
 
 
 class _StateWriter(Protocol):
@@ -36,6 +37,10 @@ class AnalysisSession:
     user_selected_titles: list[str] = field(default_factory=list)
     proposals: list[IdeationProposal] = field(default_factory=list)
     blocked_reason: str | None = None
+    ask_questions: bool = False
+    question_answers: list[UserAnswer] | None = None
+    pending_questions: list[QuestionRecord] = field(default_factory=list)
+    pending_stage: str = ""
 
 
 @dataclass
@@ -46,3 +51,5 @@ class OrchestratorResult:
     needs: list[UnmetNeed]
     proposals: list[IdeationProposal]
     reason: str | None = None
+    questions: list[QuestionRecord] = field(default_factory=list)
+    stage: str = ""

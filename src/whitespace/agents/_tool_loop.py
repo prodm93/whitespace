@@ -3,7 +3,7 @@
 An agent hands the router a toolkit (tool schemas + a dispatcher), the
 model decides which tools to call and when it has enough evidence, and
 the loop returns a plain-text findings transcript. The agent then makes
-its own final structured call on the findings — keeping structured
+its own final structured call on the findings; this keeps structured
 output separate from tool use, which not every provider combines well.
 """
 
@@ -15,6 +15,10 @@ from typing import Any, Protocol
 from whitespace.models.router import ModelRouter
 
 logger = logging.getLogger(__name__)
+
+
+class TerminalToolError(RuntimeError):
+    """A tool failure that must end the whole run instead of being reported to the model."""
 
 
 class Toolkit(Protocol):
@@ -93,6 +97,8 @@ async def run_tool_loop(
             calls_made += 1
             try:
                 output = await toolkit.dispatch(call["name"], call["arguments"])
+            except TerminalToolError:
+                raise
             except Exception:
                 logger.exception("Tool %s failed for role=%s", call["name"], role)
                 output = f"Tool {call['name']} failed; try a different call."

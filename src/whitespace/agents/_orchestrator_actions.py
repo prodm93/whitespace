@@ -9,6 +9,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from whitespace.agents._orchestrator_question_actions import (
+    guard_new_run,
+    run_gap_stage,
+    run_ideation_stage,
+    submit_answers,
+)
 from whitespace.agents._orchestrator_session import AnalysisSession
 from whitespace.agents._orchestrator_tool_defs import TOOL_DEFINITIONS
 
@@ -54,6 +60,8 @@ class OrchestratorActions:
             return await self._gap_analysis()
         if name == "run_ideation":
             return await self._ideation(list(arguments.get("selected_titles", [])))
+        if name == "submit_question_answers":
+            return await submit_answers(self._pipeline, self._session)
         if name == "query_knowledge_graph":
             question = str(arguments.get("question", ""))
             return await self._pipeline.query(question) if question else "No question given."
@@ -69,7 +77,9 @@ class OrchestratorActions:
             f"domain docs staged: {len(s.doc_paths)}\n"
             f"gap results: {[n.title for n in s.needs] or 'none yet'}\n"
             f"user-selected gaps: {s.user_selected_titles or 'none'}\n"
-            f"proposals: {len(s.proposals)}"
+            f"proposals: {len(s.proposals)}\n"
+            f"questions waiting for the user: {len(s.pending_questions)}\n"
+            f"answers ready to submit: {len(s.question_answers or [])}"
         )
 
     async def _extract_profile(self) -> str:
@@ -99,6 +109,8 @@ class OrchestratorActions:
 
     async def _gap_analysis(self) -> str:
         s = self._session
+        if (refusal := await guard_new_run(self._pipeline, s)) is not None:
+            return refusal
         if self._gap_analysis_ran:
             titles = "; ".join(n.title for n in s.needs)
             return f"Gap analysis already ran this job. {len(s.needs)} gaps: {titles}"
@@ -111,20 +123,16 @@ class OrchestratorActions:
             s.blocked_reason = msg
             return msg
         self._gap_analysis_ran = True
-        s.needs = await self._pipeline.analyse_gaps(
-            s.profile,
-            s.domain,
-            s.doc_paths,
-            keep_findings=s.keep_findings,
-            run_id=s.run_id or None,
-            fresh_start=s.fresh_start,
-        )
+        if (stopped := await run_gap_stage(self._pipeline, s)) is not None:
+            return stopped
         s.blocked_reason = None
         titles = "; ".join(n.title for n in s.needs)
         return f"Gap analysis complete. {len(s.needs)} gaps found: {titles}"
 
     async def _ideation(self, selected_titles: list[str]) -> str:
         s = self._session
+        if (refusal := await guard_new_run(self._pipeline, s)) is not None:
+            return refusal
         if not s.user_selected_titles:
             return (
                 "Cannot run: gap selection must come from the user's confirmed "
@@ -148,12 +156,8 @@ class OrchestratorActions:
         chosen = [n for n in s.needs if n.title in set(requested)]
         if not chosen:
             return "None of the allowed titles match the gap results. Check get_status."
-        s.proposals = await self._pipeline.ideate(
-            chosen,
-            s.profile,
-            gap_run_id=s.gap_run_id,
-            fresh_start=s.fresh_start,
-        )
+        if (stopped := await run_ideation_stage(self._pipeline, s, chosen)) is not None:
+            return stopped
         s.blocked_reason = None
         titles = "; ".join(p.title for p in s.proposals)
         return f"Ideation complete. {len(s.proposals)} proposals: {titles}"
