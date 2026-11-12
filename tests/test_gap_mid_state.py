@@ -13,7 +13,7 @@ from whitespace.orchestration._gap_council_state import (
 from whitespace.orchestration._research_stage import RunMemory
 from whitespace.schemas.gap import CandidateGap
 from whitespace.schemas.profile import ProfessionalProfile, ProjectSummary
-from whitespace.schemas.question import ProposedQuestion, QuestionRecord
+from whitespace.schemas.question import ProposedQuestion, QuestionRecord, UserAnswer
 from whitespace.schemas.research import RawFinding
 
 
@@ -106,3 +106,19 @@ def test_run_memory_round_trip_restores_dated_findings() -> None:
 
     assert restored == memory
     assert restored.prior_findings[0].found_at == datetime(2026, 7, 1, 12, 30, tzinfo=UTC)
+
+
+def test_mid_state_with_answers_and_discards_survives_json_round_trip() -> None:
+    state = _mid_state()
+    state["user_answers"] = [
+        UserAnswer(question_id="q-1", status="answered", answer="Yes, 400C exhaust"),
+        UserAnswer(question_id="q-2", status="skipped"),
+    ]
+    state["questions_enabled"] = True
+    state["held_discards"] = [{"title": "Old", "description": "d", "reason": "r", "domain": "e"}]
+    state["final_discards"] = [{"title": "Kill", "description": "d", "reason": "r", "domain": "e"}]
+
+    restored = load_mid_state(json.loads(json.dumps(dump_mid_state(state))))
+
+    assert restored == state
+    assert isinstance(restored["user_answers"][0], UserAnswer)

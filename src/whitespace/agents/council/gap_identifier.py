@@ -7,16 +7,23 @@ import logging
 
 from whitespace.agents._graph_actions import GraphActions
 from whitespace.agents._tool_loop import run_tool_loop
+from whitespace.agents.council._answer_prompts import GAP_REFINE_FORMAT, GAP_REFINE_PROMPT
+from whitespace.agents.council._answer_refinement import Refined, request_refinement
+from whitespace.agents.council._gap_candidates import (
+    added_gaps,
+    gap_from_item,
+    refined_gaps,
+    revised_gaps,
+)
 from whitespace.agents.council._gap_prompts import (
     CONCLUDE_PROMPT,
     EXPLORE_PROMPT,
     GAP_REVISIONS_FORMAT,
     GAPS_FORMAT,
     NEIGHBOUR_CONCLUDE_BLOCK,
-    NEIGHBOUR_CRAFT_BLOCK,
-    QUERY_PROMPT,
     REVISION_PROMPT,
 )
+from whitespace.agents.council._gap_queries import craft_gap_queries
 from whitespace.agents.council._helpers import format_profile
 from whitespace.agents.council._question_proposals import parse_proposed_questions
 from whitespace.agents.council._revision import request_revisions
@@ -28,7 +35,6 @@ from whitespace.schemas.profile import ProfessionalProfile
 logger = logging.getLogger(__name__)
 
 _MAX_TOOL_CALLS = 8
-_MAX_QUERIES = 5
 
 
 class GapIdentifier:
@@ -64,32 +70,9 @@ class GapIdentifier:
         neighbours: str = "",
     ) -> list[str]:
         """Write this member's research queries for the domain."""
-        user_msg = f"## DOMAIN\n\n{domain}\n\n## USER PROFILE\n\n{format_profile(profile)}"
-        if prior_queries:
-            listed = "\n".join(f"- {q}" for q in prior_queries[:40])
-            user_msg += (
-                f"\n\n## ALREADY EXECUTED IN PREVIOUS RUNS (do not repeat; "
-                f"their results are already available)\n\n{listed}"
-            )
-        if neighbours:
-            user_msg += NEIGHBOUR_CRAFT_BLOCK.format(neighbours=neighbours)
-        result = await self._router.call(
-            role=self._role_name,
-            messages=[
-                {"role": "system", "content": QUERY_PROMPT.format(n=_MAX_QUERIES)},
-                {"role": "user", "content": user_msg},
-            ],
-            temperature=0.8,
-            response_format={"type": "json_object"},
+        return await craft_gap_queries(
+            self._router, self._role_name, domain, profile, prior_queries, neighbours
         )
-        try:
-            queries = json.loads(result["content"]).get("queries", [])
-        except (json.JSONDecodeError, AttributeError):
-            logger.warning("GapIdentifier[%s]: malformed query JSON", self._role_name)
-            return [domain]
-        cleaned = [q for q in queries if isinstance(q, str) and q.strip()]
-        logger.info("GapIdentifier[%s]: crafted %d queries", self._role_name, len(cleaned))
-        return cleaned[:_MAX_QUERIES] or [domain]
 
     async def run(
         self,
@@ -129,15 +112,7 @@ class GapIdentifier:
         )
         model_id = result["model_id"]
         parsed = json.loads(result["content"])
-        gaps = [
-            CandidateGap(
-                title=g["title"],
-                description=g["description"],
-                source_model=model_id,
-                evidence=[e for e in g.get("evidence", []) if isinstance(e, str)],
-            )
-            for g in parsed.get("gaps", [])
-        ]
+        gaps = [gap_from_item(g, model_id) for g in parsed.get("gaps", [])]
         logger.info(
             "GapIdentifier[%s]: surfaced %d candidate gaps via %s",
             self._role_name,
@@ -174,14 +149,35 @@ class GapIdentifier:
             graph_context=graph_context,
             profile=profile,
         )
-        return [
-            CandidateGap(
-                title=item["title"],
-                description=item["description"],
-                source_model=model_id,
-                candidate_id=original.candidate_id,
-                source_role=original.source_role,
-                evidence=[e for e in item.get("evidence", []) if isinstance(e, str)],
-            )
-            for (original, _), item in zip(flagged, items, strict=False)
-        ]
+        return revised_gaps([original for original, _ in flagged], items, model_id)
+
+    async def refine(
+        self,
+        own: list[CandidateGap],
+        answers_text: str,
+        context: str,
+        profile: ProfessionalProfile,
+        *,
+        allow_queries: bool,
+        valid_keys: set[str],
+    ) -> Refined[CandidateGap]:
+        """Revise and extend this identifier's own candidates from the user's answers."""
+        out = await request_refinement(
+            self._router,
+            role=self._role_name,
+            system_prompt=GAP_REFINE_PROMPT,
+            response_format=GAP_REFINE_FORMAT,
+            response_key="gaps",
+            new_key="new_gaps",
+            own=own,
+            answers_text=answers_text,
+            context=context,
+            profile=profile,
+            allow_queries=allow_queries,
+            valid_keys=valid_keys,
+        )
+        return Refined(
+            revised=refined_gaps(own, out.items, out.model_id),
+            added=added_gaps(out.new_items, out.model_id, self._role_name),
+            queries=out.follow_up_queries,
+        )

@@ -7,10 +7,11 @@ from typing import Any, TypedDict, cast
 from pydantic import BaseModel
 
 from whitespace.orchestration._research_stage import RunMemory
+from whitespace.orchestration._state_codec import Codec, dump_state, load_state
 from whitespace.schemas.critique import CriticReport
 from whitespace.schemas.gap import CandidateGap, UnmetNeed
 from whitespace.schemas.profile import ProfessionalProfile
-from whitespace.schemas.question import ProposedQuestion, QuestionRecord
+from whitespace.schemas.question import ProposedQuestion, QuestionRecord, UserAnswer
 
 
 class GapCouncilState(TypedDict, total=False):
@@ -30,6 +31,10 @@ class GapCouncilState(TypedDict, total=False):
     report: CriticReport | None
     revision_round: int
     synthesised_needs: list[UnmetNeed]
+    user_answers: list[UserAnswer]
+    questions_enabled: bool
+    held_discards: list[dict[str, str]]
+    final_discards: list[dict[str, str]]
 
 
 _MODELS: dict[str, type[BaseModel]] = {
@@ -40,34 +45,42 @@ _MODEL_LISTS: dict[str, type[BaseModel]] = {
     "candidates": CandidateGap,
     "proposed_questions": ProposedQuestion,
     "pending_questions": QuestionRecord,
+    "user_answers": UserAnswer,
+}
+
+
+_CUSTOM: dict[str, Codec] = {
+    "run_memory": (lambda memory: memory.to_dict(), RunMemory.from_dict),
 }
 
 
 def dump_mid_state(state: GapCouncilState) -> dict[str, Any]:
     """Convert the state between council halves to JSON-compatible data."""
-    data: dict[str, Any] = {}
-    for key, value in cast(dict[str, Any], state).items():
-        if key == "run_memory":
-            data[key] = value.to_dict()
-        elif key in _MODEL_LISTS:
-            data[key] = [item.model_dump(mode="json") for item in value]
-        elif key in _MODELS and value is not None:
-            data[key] = value.model_dump(mode="json")
-        else:
-            data[key] = value
-    return data
+    return dump_state(cast(dict[str, Any], state), _MODELS, _MODEL_LISTS, _CUSTOM)
 
 
 def load_mid_state(data: dict[str, Any]) -> GapCouncilState:
     """Rebuild the state between council halves from ``dump_mid_state`` output."""
-    state: dict[str, Any] = {}
-    for key, value in data.items():
-        if key == "run_memory":
-            state[key] = RunMemory.from_dict(value)
-        elif key in _MODEL_LISTS:
-            state[key] = [_MODEL_LISTS[key].model_validate(item) for item in value]
-        elif key in _MODELS and value is not None:
-            state[key] = _MODELS[key].model_validate(value)
-        else:
-            state[key] = value
-    return cast(GapCouncilState, state)
+    return cast(GapCouncilState, load_state(data, _MODELS, _MODEL_LISTS, _CUSTOM))
+
+
+def build_initial_gap_state(
+    profile: ProfessionalProfile,
+    domain: str,
+    doc_paths: list[str] | None,
+    *,
+    keep_findings: bool,
+    run_id: str,
+    run_memory: RunMemory,
+    questions_enabled: bool,
+) -> GapCouncilState:
+    """The state a gap council run starts from."""
+    return {
+        "domain": domain,
+        "profile": profile,
+        "doc_paths": doc_paths or [],
+        "keep_findings": keep_findings,
+        "run_id": run_id,
+        "run_memory": run_memory,
+        "questions_enabled": questions_enabled,
+    }
