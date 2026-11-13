@@ -68,10 +68,7 @@ class GraphitiClient:
             ),
         )
 
-        logger.info(
-            "GraphitiClient: initialising in namespace %s",
-            self._config.graphiti_namespace,
-        )
+        logger.info("GraphitiClient: initialising")
         self._graphiti = Graphiti(
             graph_driver=driver,
             llm_client=llm_client,
