@@ -32,6 +32,7 @@ class Neo4jClient:
         self._driver = AsyncGraphDatabase.driver(
             self._config.neo4j_uri,
             auth=(self._config.neo4j_username, self._config.neo4j_password),
+            liveness_check_timeout=30,
         )
         await self._driver.verify_connectivity()
 
