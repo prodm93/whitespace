@@ -11,6 +11,7 @@ from whitespace.agents.profile_agent import ProfileAgent
 from whitespace.config import Config
 from whitespace.graph.graphiti_client import GraphitiClient
 from whitespace.graph.neo4j_client import Neo4jClient
+from whitespace.orchestration._shared_clients import SharedClients
 from whitespace.orchestration.gap_council_graph import GapCouncilGraph
 from whitespace.orchestration.ideation_council_graph import IdeationCouncilGraph
 from whitespace.orchestration.ingest_graph import IngestGraph
@@ -23,12 +24,40 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def build_shared(config: Config) -> SharedClients:
+    """Build the clients that own a network connection. Nothing connects yet."""
+    from whitespace.models.providers import ProviderFactory
+    from whitespace.observability.langsmith import configure_tracing_env
+
+    configure_tracing_env(config)
+    neo4j = Neo4jClient(config)
+    return SharedClients(
+        neo4j=neo4j,
+        graphiti=GraphitiClient(config, neo4j),
+        provider_factory=ProviderFactory(config),
+    )
+
+
 def _build_pipeline(
     cls: type[Pipeline],
     config: Config,
     registry_path: Path | None,
     session_store: SessionStore | None,
 ) -> Pipeline:
+    shared = build_shared(config)
+    return build_run_pipeline(cls, config, shared, registry_path, session_store, owns_shared=True)
+
+
+def build_run_pipeline(
+    cls: type[Pipeline],
+    config: Config,
+    shared: SharedClients,
+    registry_path: Path | None,
+    session_store: SessionStore | None,
+    *,
+    owns_shared: bool,
+) -> Pipeline:
+    """Build every per-run object on top of ``shared``; the result is bound to ``config``."""
     from whitespace.agents._graph_actions import GraphActions
     from whitespace.agents.council.gap_critic import GapCritic
     from whitespace.agents.council.gap_identifier import GapIdentifier
@@ -41,11 +70,9 @@ def _build_pipeline(
     from whitespace.agents.graph_agent import GraphAgent
     from whitespace.agents.ontology_agent import OntologyAgent
     from whitespace.agents.retrieval_planner_agent import RetrievalPlannerAgent
-    from whitespace.models.providers import ProviderFactory
     from whitespace.models.registry import ModelRegistry
     from whitespace.models.router import ModelRouter
     from whitespace.observability.cost_tracker import CostTracker
-    from whitespace.observability.langsmith import configure_tracing_env
     from whitespace.observability.local_metrics import LocalMetricsEmitter
     from whitespace.observability.metrics import MetricsEmitter
     from whitespace.orchestration._gap_snapshot import GapSnapshotWriter
@@ -60,15 +87,13 @@ def _build_pipeline(
     from whitespace.tools.search.uspto_client import UsptpClient
     from whitespace.tools.search.web_search import WebSearch
 
-    configure_tracing_env(config)
-
     if registry_path is None:
         registry_path = Path(__file__).resolve().parents[3] / "model_registry.yaml"
 
-    neo4j = Neo4jClient(config)
-    graphiti = GraphitiClient(config, neo4j)
+    neo4j = shared.neo4j
+    graphiti = shared.graphiti
     registry = ModelRegistry(registry_path)
-    provider_factory = ProviderFactory(config)
+    provider_factory = shared.provider_factory
     emitter: MetricsEmitter
     if config.mode == "saas":
         from whitespace.observability.cloudwatch_metrics import CloudWatchMetricsEmitter
@@ -152,4 +177,5 @@ def _build_pipeline(
         dedup=dedup,
         session_store=session_store,
         question_runs=question_runs,
+        owns_shared=owns_shared,
     )

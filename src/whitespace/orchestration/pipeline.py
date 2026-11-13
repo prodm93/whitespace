@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from whitespace.agents.context_agent import ContextAgent
 from whitespace.agents.profile_agent import ProfileAgent
@@ -15,6 +15,7 @@ from whitespace.graph.graphiti_client import GraphitiClient
 from whitespace.graph.neo4j_client import Neo4jClient
 from whitespace.models.router import ModelRouter
 from whitespace.orchestration._memory import load_gap_memory, load_ideation_negatives
+from whitespace.orchestration._pipeline_lifecycle import PipelineLifecycleMixin
 from whitespace.orchestration._pipeline_questions import PipelineQuestionsMixin
 from whitespace.orchestration._research_stage import RunMemory
 from whitespace.orchestration._run_records import save_gap_result, save_idea_result
@@ -30,13 +31,14 @@ from whitespace.tools.dedup import SemanticDeduplicator
 
 if TYPE_CHECKING:
     from whitespace.orchestration._question_runs import QuestionRuns
+    from whitespace.orchestration._shared_clients import SharedClients
 
 logger = logging.getLogger(__name__)
 
 _IDEATION_QUERY = "Retrieve patent landscape context for ideation on unmet needs"
 
 
-class Pipeline(PipelineQuestionsMixin):
+class Pipeline(PipelineLifecycleMixin, PipelineQuestionsMixin):
     """Top-level coordinator for the full ideation flow.
 
     Human-in-the-loop interrupt sits at the method boundary:
@@ -60,6 +62,7 @@ class Pipeline(PipelineQuestionsMixin):
         dedup: SemanticDeduplicator,
         session_store: SessionStore | None = None,
         question_runs: QuestionRuns | None = None,
+        owns_shared: bool = True,
     ) -> None:
         self._config = config
         self._neo4j = neo4j
@@ -74,6 +77,7 @@ class Pipeline(PipelineQuestionsMixin):
         self._dedup = dedup
         self._store = session_store
         self._question_runs = question_runs
+        self._owns_shared = owns_shared
 
     @classmethod
     def from_config(
@@ -88,21 +92,21 @@ class Pipeline(PipelineQuestionsMixin):
 
         return _build_pipeline(cls, config, registry_path, session_store)
 
-    async def initialise(self) -> None:
-        """Connect Neo4j and initialise Graphiti. Call before any run."""
-        await self._neo4j.connect()
-        await self._graphiti.initialise()
+    @classmethod
+    def from_shared(
+        cls,
+        shared: SharedClients,
+        config: Config,
+        *,
+        registry_path: Path | None = None,
+        session_store: SessionStore | None = None,
+    ) -> Pipeline:
+        """Build a pipeline for one run on kept clients; it does not open or close them."""
+        from whitespace.orchestration._wiring import build_run_pipeline
 
-    async def close(self) -> None:
-        await self._graphiti.close()
-        await self._neo4j.close()
-
-    async def __aenter__(self) -> Self:
-        await self.initialise()
-        return self
-
-    async def __aexit__(self, *_: object) -> None:
-        await self.close()
+        return build_run_pipeline(
+            cls, config, shared, registry_path, session_store, owns_shared=False
+        )
 
     async def extract_profile(self, doc_paths: list[str]) -> ProfessionalProfile:
         logger.info("Pipeline.extract_profile: %d documents", len(doc_paths))
