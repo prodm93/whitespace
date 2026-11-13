@@ -13,14 +13,14 @@ from typing import Any
 
 from _actions import _rehydrate
 from _dispatch import dispatch_tool
-from _job_state import _publish, _set_status
+from _failure import handle_failure, handle_reservation_error
+from _job_state import _publish
 from _loop import _compute_final_result, _decide
-from _reservation_ops import _cleanup_reservation, _release_reservation, _validate_usage_config
+from _reservation_ops import _release_reservation, _validate_usage_config
 from _reservation_state import (
     _USER_FACING_ERROR,
     ReservationMode,
     ReservationStateError,
-    _expire_reservation_lease,
     _validate_and_start,
 )
 from aws_durable_execution_sdk_python import DurableContext, durable_execution
@@ -132,61 +132,26 @@ def handler(event: dict, context: DurableContext) -> dict:
         return result
 
     except ReservationStateError as rse:
-        if ownership_verified:
-            if owned_expired:
-                try:
-                    context.step(
-                        (lambda _, uid=user_id, jid=job_id: _cleanup_reservation(uid, jid)),
-                        name="cleanup_expired_reservation",
-                    )
-                except Exception as cleanup_exc:
-                    logger.error(
-                        "Expired reservation cleanup failed for %s: %s", job_id, cleanup_exc
-                    )
-            elif reservation_mode == "required" and not reservation_done:
-                try:
-                    context.step(
-                        (lambda _, jid=job_id, uid=user_id: _expire_reservation_lease(jid, uid)),
-                        name="expire_lease",
-                    )
-                except Exception:
-                    logger.error("Failed to expire lease for %s", job_id)
-            try:
-                context.step(
-                    (lambda _, e=rse: _set_status(job_id, "failed", error=str(e))),
-                    name="status_failed",
-                )
-            except Exception:
-                logger.error("Failed to write failed status for %s", job_id)
+        handle_reservation_error(
+            context,
+            job_id,
+            user_id,
+            rse,
+            ownership_verified=ownership_verified,
+            owned_expired=owned_expired,
+            reservation_mode=reservation_mode,
+            reservation_done=reservation_done,
+        )
         raise
 
     except Exception as exc:
-        if ownership_verified and not reservation_done:
-            try:
-                context.step(
-                    (lambda _, uid=user_id, jid=job_id: _cleanup_reservation(uid, jid)),
-                    name="cleanup_reservation",
-                )
-            except Exception as cleanup_exc:
-                logger.error("Reservation cleanup failed for %s: %s", job_id, cleanup_exc)
-                if reservation_mode == "required":
-                    try:
-                        context.step(
-                            (
-                                lambda _, jid=job_id, uid=user_id: _expire_reservation_lease(
-                                    jid, uid
-                                )
-                            ),
-                            name="expire_lease",
-                        )
-                    except Exception:
-                        logger.error("Failed to expire lease for %s", job_id)
-        if ownership_verified:
-            try:
-                context.step(
-                    (lambda _, e=exc: _set_status(job_id, "failed", error=str(e))),
-                    name="status_failed",
-                )
-            except Exception:
-                logger.error("Failed to write failed status for %s", job_id)
+        handle_failure(
+            context,
+            job_id,
+            user_id,
+            exc,
+            ownership_verified=ownership_verified,
+            reservation_mode=reservation_mode,
+            reservation_done=reservation_done,
+        )
         raise

@@ -68,6 +68,7 @@ def test_owned_expired_reservation_is_rejected(
 
 
 def test_owned_expired_reservation_is_released_and_failed(monkeypatch: Any) -> None:
+    import _failure
     import _reservation_state
     import handler
 
@@ -78,8 +79,8 @@ def test_owned_expired_reservation_is_released_and_failed(monkeypatch: Any) -> N
         "_validate_and_start",
         MagicMock(return_value="owned_expired"),
     )
-    monkeypatch.setattr(handler, "_cleanup_reservation", cleanup)
-    monkeypatch.setattr(handler, "_set_status", set_status)
+    monkeypatch.setattr(_failure, "_cleanup_reservation", cleanup)
+    monkeypatch.setattr(_failure, "_set_status", set_status)
     ctx = FakeDurableContext()
 
     with pytest.raises(_reservation_state.ReservationStateError):
