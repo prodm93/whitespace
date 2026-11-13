@@ -35,6 +35,8 @@ dependencies = [
     "firecrawl-py>=1.5,<3",
     # Model registry
     "pyyaml>=6,<7",
+    # Retries
+    "tenacity>=9.1,<10",
     # Session store (BYOK)
     "aiosqlite>=0.20,<1",
     # Observability
