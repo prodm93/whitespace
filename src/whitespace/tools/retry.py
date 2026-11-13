@@ -1,46 +1,37 @@
-import asyncio
+"""The retry policy for transient errors, built on tenacity."""
+
+from __future__ import annotations
+
 import logging
-from collections.abc import Callable, Coroutine
-from typing import Any, TypeVar
+
+from tenacity import (
+    AsyncRetrying,
+    before_sleep_log,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
 
+def transient_retry(
+    *,
+    attempts: int,
+    first_wait: float,
+    max_wait: float,
+    retry_on: tuple[type[BaseException], ...],
+) -> AsyncRetrying:
+    """Return a policy that tries a call ``attempts`` times in total.
 
-async def retry_async(
-    fn: Callable[..., Coroutine[Any, Any, T]],
-    *args: Any,
-    retries: int = 3,
-    base_delay: float = 1.0,
-    max_delay: float = 30.0,
-    transient_exceptions: tuple[type[Exception], ...] = (
-        TimeoutError,
-        ConnectionError,
-    ),
-    **kwargs: Any,
-) -> T:
-    """Call *fn* with exponential backoff on transient errors.
-
-    Non-transient exceptions propagate immediately.
+    Only the ``retry_on`` types are retried; any other error comes out at once. Waits
+    start at ``first_wait`` seconds and double up to ``max_wait``. When the attempts run
+    out, the last error itself is raised. Use as ``await transient_retry(...)(fn, *args)``.
     """
-    last_error: Exception | None = None
-    for attempt in range(retries + 1):
-        try:
-            return await fn(*args, **kwargs)
-        except transient_exceptions as exc:
-            last_error = exc
-            if attempt == retries:
-                break
-            delay = min(base_delay * (2**attempt), max_delay)
-            logger.warning(
-                "retry_async: attempt %d/%d failed (%s), retrying in %.1fs",
-                attempt + 1,
-                retries + 1,
-                exc,
-                delay,
-            )
-            await asyncio.sleep(delay)
-        except Exception:
-            raise
-    raise RuntimeError(f"All {retries + 1} attempts failed") from last_error
+    return AsyncRetrying(
+        stop=stop_after_attempt(attempts),
+        wait=wait_exponential(multiplier=first_wait, max=max_wait),
+        retry=retry_if_exception_type(retry_on),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )

@@ -4,7 +4,7 @@ from typing import Any
 from whitespace.models.providers import TRANSIENT_EXCEPTIONS, ProviderFactory
 from whitespace.models.registry import ModelEntry, ModelRegistry
 from whitespace.observability.cost_tracker import CostTracker
-from whitespace.tools.retry import retry_async
+from whitespace.tools.retry import transient_retry
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,13 @@ class ModelRouter:
         tools: list[dict[str, Any]] | None,
         tool_choice: str | None,
     ) -> dict[str, Any]:
-        return await retry_async(
+        policy = transient_retry(
+            attempts=entry.retries + 1,
+            first_wait=1.0,
+            max_wait=30.0,
+            retry_on=TRANSIENT_EXCEPTIONS,
+        )
+        return await policy(
             self._provider_factory.call,
             entry,
             messages,
@@ -81,6 +87,4 @@ class ModelRouter:
             response_format,
             tools,
             tool_choice,
-            retries=entry.retries,
-            transient_exceptions=TRANSIENT_EXCEPTIONS,
         )

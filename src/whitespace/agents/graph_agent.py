@@ -1,13 +1,9 @@
-"""Graph agent — populates the knowledge graph via Graphiti add_episode.
+"""Graph agent: populates the knowledge graph via Graphiti ``add_episode``.
 
-Per-document dispatch:
-* ``.json`` → validate, pass with ``source=EpisodeType.json``
-* ``.txt`` → read UTF-8, pass with ``source=EpisodeType.text``
-* anything else → extract via ``DocumentLoader``, pass as text
-
-Per-document failures are logged and skipped — one bad file must not
-abort ingestion of the rest. The aggregate outcome is returned as an
-:class:`IngestResult`.
+Per document: ``.json`` is validated and passed with ``source=EpisodeType.json``; ``.txt``
+is read as UTF-8 and passed with ``source=EpisodeType.text``; anything else is extracted
+via ``DocumentLoader`` and passed as text. Per-document failures are logged and skipped,
+so one bad file never aborts the rest; the outcome is returned as an :class:`IngestResult`.
 """
 
 from __future__ import annotations
@@ -29,7 +25,7 @@ from whitespace.schemas.patent import NormalisedDocument
 from whitespace.tools.document_loader import DocumentLoader
 from whitespace.tools.json_reader import JsonReader
 from whitespace.tools.normaliser import describe_finding
-from whitespace.tools.retry import retry_async
+from whitespace.tools.retry import transient_retry
 from whitespace.tools.text_reader import TextReader
 
 logger = logging.getLogger(__name__)
@@ -93,7 +89,12 @@ class GraphAgent:
                 logger.exception("GraphAgent: failed to ingest %s", path)
         for doc in documents:
             try:
-                await retry_async(
+                await transient_retry(
+                    attempts=3,
+                    first_wait=2.0,
+                    max_wait=15.0,
+                    retry_on=(TimeoutError, ConnectionError),
+                )(
                     self._call_add_episode,
                     doc.title or doc.source_name,
                     f"{doc.title}\n\n{doc.content}",
@@ -103,9 +104,6 @@ class GraphAgent:
                     entity_types,
                     edge_types,
                     edge_type_map,
-                    retries=2,
-                    base_delay=2.0,
-                    max_delay=15.0,
                 )
                 successes += 1
             except Exception:
@@ -138,7 +136,12 @@ class GraphAgent:
 
         episode_body, source, source_description = await self._read_episode(path, suffix, name)
 
-        await retry_async(
+        await transient_retry(
+            attempts=3,
+            first_wait=2.0,
+            max_wait=15.0,
+            retry_on=(TimeoutError, ConnectionError),
+        )(
             self._call_add_episode,
             name,
             episode_body,
@@ -148,9 +151,6 @@ class GraphAgent:
             entity_types,
             edge_types,
             edge_type_map,
-            retries=2,
-            base_delay=2.0,
-            max_delay=15.0,
         )
 
     async def _read_episode(
