@@ -1,6 +1,6 @@
 """AWS Bedrock Converse API call with normalised tool support.
 
-boto3 is never imported here — ProviderFactory constructs the runtime
+boto3 is never imported here; ProviderFactory constructs the runtime
 client lazily and passes it in, keeping this module import-safe in BYOK
 mode.
 """
@@ -15,13 +15,23 @@ from whitespace.models.registry import ModelEntry
 
 logger = logging.getLogger(__name__)
 
+_TRANSIENT_ERROR_CODES = frozenset(
+    {
+        "ThrottlingException",
+        "ModelTimeoutException",
+        "ServiceUnavailableException",
+        "InternalServerException",
+        "ModelNotReadyException",
+    }
+)
+
 
 def to_converse_messages(
     messages: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Translate normalised messages into Converse system + conversation lists.
 
-    Consecutive tool results merge into a single user turn — Converse
+    Consecutive tool results merge into a single user turn; Converse
     requires alternating roles, with toolResult blocks inside user messages.
     """
     system_parts: list[dict[str, Any]] = []
@@ -103,6 +113,7 @@ def parse_converse_output(response: dict[str, Any]) -> tuple[str, list[dict[str,
 
 async def call_bedrock(
     client: Any,
+    model: str,
     entry: ModelEntry,
     messages: list[dict[str, Any]],
     temperature: float,
@@ -110,15 +121,22 @@ async def call_bedrock(
     tools: list[dict[str, Any]] | None,
     tool_choice: str | None,
 ) -> dict[str, Any]:
-    """Invoke a model through the Converse API.
+    """Invoke ``model`` through the Converse API; the result names ``entry.model_id``.
 
-    Structured output (response_format) is prompt-driven on Bedrock —
-    the Converse API has no JSON-schema enforcement parameter, so the
-    argument is accepted for interface parity and intentionally unused.
+    Structured output (response_format) is prompt-driven on Bedrock; the
+    Converse API has no JSON-schema enforcement parameter, so the argument
+    is accepted for interface parity and intentionally unused.
+
+    The client makes one attempt only. Throttling, timeouts, an unavailable
+    service and connection failures are raised as the built-in
+    ``ConnectionError`` so that the caller's retry policy sees them.
     """
+    from botocore.exceptions import ClientError, ReadTimeoutError
+    from botocore.exceptions import ConnectionError as BotoConnectionError
+
     system_parts, conversation = to_converse_messages(messages)
     kwargs: dict[str, Any] = {
-        "modelId": entry.model_id,
+        "modelId": model,
         "messages": conversation,
         "inferenceConfig": {"temperature": temperature},
     }
@@ -127,7 +145,14 @@ async def call_bedrock(
     if tools:
         kwargs["toolConfig"] = to_tool_config(tools, tool_choice)
 
-    response = await asyncio.to_thread(client.converse, **kwargs)
+    try:
+        response = await asyncio.to_thread(client.converse, **kwargs)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in _TRANSIENT_ERROR_CODES:
+            raise ConnectionError(str(exc)) from exc
+        raise
+    except (BotoConnectionError, ReadTimeoutError) as exc:
+        raise ConnectionError(str(exc)) from exc
 
     content, tool_calls = parse_converse_output(response)
     usage = response.get("usage", {})

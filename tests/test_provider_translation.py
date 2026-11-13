@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
+
+import pytest
+from botocore.exceptions import ClientError
 
 from whitespace.models.bedrock_provider import (
+    call_bedrock,
     parse_converse_output,
     to_converse_messages,
     to_tool_config,
@@ -115,3 +120,51 @@ def test_parse_tool_calls_degrades_malformed_arguments() -> None:
         ]
     )
     assert parse_tool_calls(message) == [{"id": "t1", "name": "search_graph", "arguments": {}}]
+
+
+class _FakeConverseClient:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.sent: dict[str, Any] = {}
+
+    def converse(self, **kwargs: Any) -> dict[str, Any]:
+        self.sent = kwargs
+        if self.error is not None:
+            raise self.error
+        return {"output": {"message": {"content": [{"text": "hi"}]}}, "usage": {}}
+
+
+def _entry() -> Any:
+    return SimpleNamespace(model_id="anthropic.claude-opus-4-8")
+
+
+def _client_error(code: str) -> ClientError:
+    return ClientError({"Error": {"Code": code, "Message": "x"}}, "Converse")
+
+
+async def test_call_bedrock_sends_the_model_argument_and_reports_the_registry_id() -> None:
+    client = _FakeConverseClient()
+
+    result = await call_bedrock(
+        client, "us.anthropic.claude-opus-4-8", _entry(), [], 0.0, None, None, None
+    )
+
+    assert client.sent["modelId"] == "us.anthropic.claude-opus-4-8"
+    assert result["model_id"] == "anthropic.claude-opus-4-8"
+
+
+async def test_bedrock_throttling_comes_out_as_a_connection_error() -> None:
+    client = _FakeConverseClient(_client_error("ThrottlingException"))
+
+    with pytest.raises(ConnectionError):
+        await call_bedrock(client, "m", _entry(), [], 0.0, None, None, None)
+
+
+async def test_bedrock_validation_error_comes_out_unchanged() -> None:
+    error = _client_error("ValidationException")
+    client = _FakeConverseClient(error)
+
+    with pytest.raises(ClientError) as raised:
+        await call_bedrock(client, "m", _entry(), [], 0.0, None, None, None)
+
+    assert raised.value is error

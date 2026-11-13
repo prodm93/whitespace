@@ -57,16 +57,19 @@ class ProviderFactory:
             self._openrouter_client = AsyncOpenAI(
                 base_url=OPENROUTER_BASE_URL,
                 api_key=self._config.openrouter_api_key,
+                max_retries=0,
             )
         return self._openrouter_client
 
     def _get_bedrock_client(self) -> Any:
         if self._bedrock_client is None:
             import boto3
+            from botocore.config import Config as BotoConfig
 
             self._bedrock_client = boto3.client(
                 "bedrock-runtime",
                 region_name=self._config.aws_region,
+                config=BotoConfig(retries={"total_max_attempts": 1}),
             )
         return self._bedrock_client
 
@@ -88,6 +91,7 @@ class ProviderFactory:
         if self._config.mode == "saas":
             return await call_bedrock(
                 self._get_bedrock_client(),
+                entry.model_id,
                 entry,
                 messages,
                 temperature,
