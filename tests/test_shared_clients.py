@@ -15,6 +15,7 @@ from whitespace.config import Config
 from whitespace.orchestration import _wiring
 from whitespace.orchestration._shared_clients import SharedClients
 from whitespace.orchestration.pipeline import Pipeline
+from whitespace.tenant import TenantIdError
 
 
 class _FakeNeo4j:
@@ -59,6 +60,7 @@ def _config(**overrides: Any) -> Config:
     return Config(_env_file=None, **overrides)  # type: ignore[call-arg]
 
 
+@pytest.mark.protects("byok-wiring-unchanged")
 async def test_from_config_pipeline_connects_and_closes_its_own_clients(
     calls: list[str],
 ) -> None:
@@ -114,6 +116,7 @@ def _run_pipelines(monkeypatch: pytest.MonkeyPatch) -> tuple[SharedClients, Pipe
     return shared, pipeline_a, pipeline_b
 
 
+@pytest.mark.protects("graph-namespace-bound-per-run")
 def test_run_pipelines_hold_their_own_namespace_and_share_only_the_kept_clients(
     calls: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -152,3 +155,40 @@ async def test_neo4j_driver_tests_idle_connections_before_use(
     await neo4j_client.Neo4jClient(_config(mode="byok")).connect()
 
     assert factory.call_args.kwargs["liveness_check_timeout"] == 30
+
+
+@pytest.mark.protects("tenant-id-validated")
+def test_saas_pipeline_with_the_shared_namespace_is_refused_before_any_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    build_shared = MagicMock()
+    monkeypatch.setattr(_wiring, "build_shared", build_shared)
+
+    with pytest.raises(TenantIdError):
+        Pipeline.from_config(_config(mode="saas"))
+    assert build_shared.call_count == 0
+
+
+@pytest.mark.protects("tenant-id-validated")
+def test_saas_run_pipeline_with_the_shared_namespace_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    shared = _wiring.build_shared(_config(mode="saas"))
+
+    with pytest.raises(TenantIdError):
+        Pipeline.from_shared(shared, _config(mode="saas"))
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [{"mode": "saas", "graphiti_namespace": "user_a"}, {"mode": "byok"}],
+    ids=["saas-with-tenant", "byok-default"],
+)
+@pytest.mark.protects("byok-wiring-unchanged")
+def test_a_tenant_namespace_or_byok_builds(
+    monkeypatch: pytest.MonkeyPatch, overrides: dict[str, str]
+) -> None:
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+
+    assert isinstance(Pipeline.from_config(_config(**overrides)), Pipeline)

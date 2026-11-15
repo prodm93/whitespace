@@ -17,6 +17,7 @@ from whitespace.orchestration.ideation_council_graph import IdeationCouncilGraph
 from whitespace.orchestration.ingest_graph import IngestGraph
 from whitespace.orchestration.query_graph import QueryGraph
 from whitespace.store.base import SessionStore
+from whitespace.tenant import require_tenant_id
 
 if TYPE_CHECKING:
     from whitespace.orchestration.pipeline import Pipeline
@@ -44,6 +45,8 @@ def _build_pipeline(
     registry_path: Path | None,
     session_store: SessionStore | None,
 ) -> Pipeline:
+    if config.mode == "saas":
+        require_tenant_id(config.graphiti_namespace)
     shared = build_shared(config)
     return build_run_pipeline(cls, config, shared, registry_path, session_store, owns_shared=True)
 
@@ -57,7 +60,13 @@ def build_run_pipeline(
     *,
     owns_shared: bool,
 ) -> Pipeline:
-    """Build every per-run object on top of ``shared``; the result is bound to ``config``."""
+    """Build every per-run object on top of ``shared``; the result is bound to ``config``.
+
+    In SaaS mode the namespace must be a valid tenant ID, so no tenant reads the
+    shared namespace.
+    """
+    if config.mode == "saas":
+        require_tenant_id(config.graphiti_namespace)
     from whitespace.agents._graph_actions import GraphActions
     from whitespace.agents.council.gap_critic import GapCritic
     from whitespace.agents.council.gap_identifier import GapIdentifier
