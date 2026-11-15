@@ -33,6 +33,7 @@ async def _records(store: SqliteSessionStore) -> dict[str, QuestionRecord]:
     return {r.question_id: r for r in await store.list_question_records()}
 
 
+@pytest.mark.protects("paused-question-run-resumes")
 async def test_a_continue_scores_the_answers_stores_the_run_and_clears_the_row(
     tmp_path: Path,
 ) -> None:

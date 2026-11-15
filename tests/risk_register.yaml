@@ -1,0 +1,154 @@
+# Risk register: each item is one behaviour, tiered by what a user loses when it fails.
+#   critical: one user sees or changes another user's data, a caller gets in without a valid
+#             sign-in, or a secret is exposed.
+#   high:     the user loses or corrupts their own paid work, usage is counted wrongly, or a
+#             job stops with no way to recover.
+#   medium:   a result is worse, or one feature fails with a visible error and a retry works.
+#   low:      only logs, metrics or wording are affected.
+# A test proves an item with @pytest.mark.protects("<name>"); an item is covered when at least
+# one of its tests passed in the run.
+
+- name: sign-in-token-checked
+  tier: critical
+  protects: A caller with no token, an expired token, a token of another key or issuer, or a token with no subject gets in.
+- name: caller-id-from-authoriser-only
+  tier: critical
+  protects: A request that the authoriser gave no user ID reaches the enqueue, upload-URL or job-status function.
+- name: job-status-owner-only
+  tier: critical
+  protects: A user reads another user's job, or learns which job IDs exist.
+- name: latest-run-owner-only
+  tier: critical
+  protects: A user sees another user's latest run.
+- name: session-store-partition-per-tenant
+  tier: critical
+  protects: A user reads another tenant's runs, findings or discards through their own store.
+- name: tenant-id-validated
+  tier: critical
+  protects: A store or a SaaS pipeline is built for an empty, default or malformed tenant ID and shares data.
+- name: graph-namespace-bound-per-run
+  tier: critical
+  protects: A run reads or writes the graph with another tenant's namespace, or the kept clients carry tenant data.
+- name: run-pipeline-never-reused
+  tier: critical
+  protects: A run gets the pipeline or the store of an earlier run, which can be another tenant's.
+- name: graph-calls-one-group-only
+  tier: critical
+  protects: A graph search, write, read by ID or delete reaches another tenant's group.
+- name: upload-key-owner-only
+  tier: critical
+  protects: A job ingests another user's uploaded file or a local file.
+- name: upload-key-under-caller-prefix
+  tier: critical
+  protects: An upload key escapes the caller's own prefix through the file name.
+- name: job-start-owner-only
+  tier: critical
+  protects: A job starts for a payload whose user does not own the jobs row.
+
+- name: usage-cap-enforced
+  tier: high
+  protects: A user at the limit of their tier, or with an unknown tier, gets a job queued.
+- name: run-slot-returned-on-failure
+  tier: high
+  protects: A user loses a run slot to a failed queue send, a failed job or an unused reservation.
+- name: run-slot-counted-on-gap-run
+  tier: high
+  protects: A gap analysis that ran is not counted, or a blocked one uses up a run slot.
+- name: job-failure-recorded
+  tier: high
+  protects: A job that failed is not shown as failed with its error text.
+- name: job-result-published
+  tier: high
+  protects: The result of a finished job never reaches the frontend.
+- name: job-dispatched-once
+  tier: high
+  protects: A queued job starts no durable execution, or a record with no job ID is lost silently.
+- name: gap-analysis-once-per-job
+  tier: high
+  protects: A second request for gap analysis in one job runs and is paid for again.
+- name: gap-selection-user-only
+  tier: high
+  protects: Ideation runs for gaps that the user did not select.
+- name: graph-unreachable-retried-then-failed
+  tier: high
+  protects: A short graph outage fails the job at once, or a long one ends without telling the user that the graph could not be reached.
+- name: dead-connection-rebuilt
+  tier: high
+  protects: A kept connection that died fails every later run on the container.
+- name: model-fallback-chain
+  tier: high
+  protects: A failing model fails its role instead of giving way to the next model of the chain.
+- name: model-attempts-as-registry
+  tier: high
+  protects: A model is tried more or fewer times than the registry says, or a client retries by itself.
+- name: bedrock-model-id-accepted
+  tier: high
+  protects: A model that Bedrock serves only through a profile is called with an ID that Bedrock refuses.
+- name: gap-and-idea-runs-saved
+  tier: high
+  protects: A finished gap run or ideation run is lost for the user.
+- name: paused-question-run-resumes
+  tier: high
+  protects: A run that paused for questions cannot continue with the user's answers.
+- name: byok-wiring-unchanged
+  tier: high
+  protects: A BYOK pipeline built from a config does not connect or close its own clients.
+- name: leftover-work-stopped-at-call-end
+  tier: high
+  protects: Work that one call left on the kept loop keeps running during a later call.
+- name: fallback-close-leaves-nothing-kept
+  tier: high
+  protects: In the fallback mode, kept clients or the loop survive the end of a run.
+- name: interrupted-close-finishes-the-cleanup
+  tier: high
+  protects: An interrupted close skips the rest of the cleanup and leaves clients open.
+
+- name: search-surface-failure-degrades
+  tier: medium
+  protects: One search source that fails stops the whole run instead of giving no findings from it.
+- name: duplicate-findings-dropped
+  tier: medium
+  protects: Near-identical findings are kept, or a failed embedding call loses findings.
+- name: graph-ingest-failure-counted
+  tier: medium
+  protects: A document that cannot be ingested stops the others, or its failure is not counted.
+- name: graph-search-failure-is-empty
+  tier: medium
+  protects: A failed graph search raises an error instead of returning no rows.
+- name: unsupported-document-refused
+  tier: medium
+  protects: A file format with no loader fails with an unclear error.
+- name: missing-input-blocks-with-reason
+  tier: medium
+  protects: A missing profile or domain does not give a blocked result with the reason.
+- name: job-status-shape
+  tier: medium
+  protects: The status text or the final result does not have the shape the orchestrator and the frontend read.
+- name: unknown-tool-reported
+  tier: medium
+  protects: A tool name that does not exist is not reported back to the model.
+- name: upload-size-and-count-limited
+  tier: medium
+  protects: A file over the tier's size or count limit is accepted.
+- name: cost-estimated-per-call
+  tier: medium
+  protects: A model call records no tokens or no estimated cost.
+- name: credential-check-reports-each-service
+  tier: medium
+  protects: The credential check says a key or a database login works when it does not, or hides why it failed.
+- name: search-results-stored
+  tier: medium
+  protects: The results of a search request are not stored, or their counts are wrong.
+- name: tests-cannot-reach-real-services
+  tier: medium
+  protects: A test run reads the real credentials or reaches a real Neo4j, model or AWS service.
+
+- name: tracing-env-set-from-config
+  tier: low
+  protects: The tracing switches do not follow the config.
+- name: shared-client-log-has-no-namespace
+  tier: low
+  protects: The Graphiti client's start log names a tenant namespace.
+- name: coverage-gate-reports-table
+  tier: low
+  protects: The coverage gate gives no table of line coverage and covered items.

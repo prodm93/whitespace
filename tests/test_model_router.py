@@ -60,6 +60,7 @@ def make_entry(model_id):
 
 
 @pytest.mark.asyncio
+@pytest.mark.protects("model-fallback-chain")
 async def test_router_falls_back_to_second_model():
     first = make_entry("model-1")
     second = make_entry("model-2")
@@ -94,6 +95,7 @@ async def test_router_falls_back_to_second_model():
 
 
 @pytest.mark.asyncio
+@pytest.mark.protects("model-fallback-chain")
 async def test_router_raises_when_all_models_fail():
     first = make_entry("model-1")
     second = make_entry("model-2")
@@ -119,6 +121,7 @@ async def test_router_raises_when_all_models_fail():
 
 
 @pytest.mark.asyncio
+@pytest.mark.protects("cost-estimated-per-call")
 async def test_router_records_cost_on_success():
     entry = make_entry("model-1")
 

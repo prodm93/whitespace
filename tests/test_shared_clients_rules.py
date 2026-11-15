@@ -75,20 +75,25 @@ def namespace_violations(source: str) -> list[str]:
     return ["mentions graphiti_namespace"] if "graphiti_namespace" in source else []
 
 
+@pytest.mark.protects("graph-namespace-bound-per-run")
 def test_shared_module_imports_no_tenant_bound_code() -> None:
     assert import_violations(_SHARED_MODULE.read_text()) == []
 
 
+@pytest.mark.protects("graph-namespace-bound-per-run")
 def test_shared_clients_has_exactly_the_three_kept_fields() -> None:
     assert field_violations(_SHARED_MODULE.read_text()) == []
 
 
 @pytest.mark.parametrize("class_name", sorted(_KEPT_CLASSES))
+@pytest.mark.protects("graph-namespace-bound-per-run")
 def test_kept_class_takes_and_keeps_no_tenant_data(class_name: str) -> None:
     assert init_violations(_KEPT_CLASSES[class_name].read_text(), class_name) == []
 
 
 @pytest.mark.parametrize("class_name", sorted(_KEPT_CLASSES))
+@pytest.mark.protects("graph-namespace-bound-per-run")
+@pytest.mark.protects("shared-client-log-has-no-namespace")
 def test_kept_class_source_never_reads_the_namespace(class_name: str) -> None:
     assert namespace_violations(_KEPT_CLASSES[class_name].read_text()) == []
 

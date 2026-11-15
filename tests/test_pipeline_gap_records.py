@@ -41,6 +41,7 @@ def _pipeline(store: Any, result: tuple[list[UnmetNeed], list[dict[str, str]]]) 
     )
 
 
+@pytest.mark.protects("gap-and-idea-runs-saved")
 async def test_needs_and_discards_are_stored_once(tmp_path: Path) -> None:
     store = SqliteSessionStore(tmp_path / "s.db")
     needs = [_need("Heat recovery"), _need("Kiln sealing")]

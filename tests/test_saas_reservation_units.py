@@ -116,6 +116,7 @@ def test_legacy_fallback_on_missing_used_count(monkeypatch: Any) -> None:
     assert calls[0] == 2
 
 
+@pytest.mark.protects("usage-cap-enforced")
 def test_denied_when_at_cap(monkeypatch: Any) -> None:
     fb = MagicMock()
     monkeypatch.setitem(sys.modules, "boto3", fb)

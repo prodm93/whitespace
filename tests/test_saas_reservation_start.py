@@ -67,6 +67,7 @@ def test_owned_expired_reservation_is_rejected(
     assert _reservation_state._validate_and_start("j1", "u1") == "owned_expired"
 
 
+@pytest.mark.protects("run-slot-returned-on-failure")
 def test_owned_expired_reservation_is_released_and_failed(monkeypatch: Any) -> None:
     import _failure
     import _reservation_state
@@ -92,6 +93,7 @@ def test_owned_expired_reservation_is_released_and_failed(monkeypatch: Any) -> N
     assert "status_failed" in ctx.step_calls
 
 
+@pytest.mark.protects("job-start-owner-only")
 def test_missing_job_row_raises_without_mutation(monkeypatch: Any) -> None:
     import _reservation_state
     import handler
@@ -109,6 +111,7 @@ def test_missing_job_row_raises_without_mutation(monkeypatch: Any) -> None:
     assert "status_failed" not in ctx.step_calls
 
 
+@pytest.mark.protects("job-start-owner-only")
 def test_identity_mismatch_raises_without_mutation(monkeypatch: Any) -> None:
     import _reservation_state
     import handler

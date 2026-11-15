@@ -14,6 +14,7 @@ from botocore.exceptions import ClientError
 # --- Auth ---
 
 
+@pytest.mark.protects("caller-id-from-authoriser-only")
 def test_returns_401_without_user_id(monkeypatch: Any) -> None:
     fb = MagicMock()
     monkeypatch.setitem(sys.modules, "boto3", fb)
@@ -35,6 +36,7 @@ def test_reads_user_id_from_auth(monkeypatch: Any) -> None:
 # --- Tier handling ---
 
 
+@pytest.mark.protects("usage-cap-enforced")
 def test_rejects_unknown_tier(monkeypatch: Any) -> None:
     fb = MagicMock()
     monkeypatch.setitem(sys.modules, "boto3", fb)
@@ -45,6 +47,7 @@ def test_rejects_unknown_tier(monkeypatch: Any) -> None:
 
 
 @pytest.mark.parametrize("tier", ["free", "pro", "unlimited"])
+@pytest.mark.protects("usage-cap-enforced")
 def test_fails_closed_when_usage_table_empty(monkeypatch: Any, tier: str) -> None:
     fb = MagicMock()
     monkeypatch.setitem(sys.modules, "boto3", fb)
@@ -76,6 +79,7 @@ def test_allows_free_under_cap(monkeypatch: Any) -> None:
 
 
 @pytest.mark.parametrize("tier,limit", [("free", 2), ("standard", 40)])
+@pytest.mark.protects("usage-cap-enforced")
 def test_denies_at_cap(monkeypatch: Any, tier: str, limit: int) -> None:
     fb = _fake_boto3(deny_reserve=True)
     _patch(monkeypatch, fb)

@@ -12,11 +12,13 @@ INVALID_IDS = ["", "default", "a#b", "a/b", "a b", "ü", "a\nb", "user_a ", "../
 
 
 @pytest.mark.parametrize("tenant_id", VALID_IDS)
+@pytest.mark.protects("tenant-id-validated")
 def test_valid_tenant_id_is_returned_unchanged(tenant_id: str) -> None:
     assert require_tenant_id(tenant_id) == tenant_id
 
 
 @pytest.mark.parametrize("tenant_id", INVALID_IDS)
+@pytest.mark.protects("tenant-id-validated")
 def test_invalid_tenant_id_is_refused(tenant_id: str) -> None:
     with pytest.raises(TenantIdError):
         require_tenant_id(tenant_id)

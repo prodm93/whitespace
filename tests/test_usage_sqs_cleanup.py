@@ -9,6 +9,7 @@ from _enqueue_helpers import _auth_event, _fake_boto3, _patch, enqueue_handler
 from botocore.exceptions import ClientError
 
 
+@pytest.mark.protects("run-slot-returned-on-failure")
 def test_cleanup_rollback_on_sqs_failure(monkeypatch: Any) -> None:
     fb = _fake_boto3()
     sqs_err = ClientError(

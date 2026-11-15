@@ -1,3 +1,5 @@
+import pytest
+
 from whitespace.models.registry import ModelEntry, ModelPricing
 from whitespace.observability.cost_tracker import CostTracker
 
@@ -10,6 +12,7 @@ class FakeEmitter:
         self.events.append((metric, value, dims))
 
 
+@pytest.mark.protects("cost-estimated-per-call")
 async def test_cost_tracker_calculates_estimated_cost():
     emitter = FakeEmitter()
     tracker = CostTracker(emitter)

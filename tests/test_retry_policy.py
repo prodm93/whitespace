@@ -48,6 +48,7 @@ def _policy(attempts: int) -> Any:
     )
 
 
+@pytest.mark.protects("model-attempts-as-registry")
 async def test_transient_error_is_retried_until_the_call_succeeds(waits: list[float]) -> None:
     flaky = _Flaky(ConnectionError("dropped"), failures=2)
 
@@ -56,6 +57,7 @@ async def test_transient_error_is_retried_until_the_call_succeeds(waits: list[fl
     assert waits == [1.0, 2.0]
 
 
+@pytest.mark.protects("model-attempts-as-registry")
 async def test_last_transient_error_itself_comes_out_when_attempts_run_out(
     waits: list[float],
 ) -> None:
@@ -69,6 +71,7 @@ async def test_last_transient_error_itself_comes_out_when_attempts_run_out(
     assert flaky.calls == 2
 
 
+@pytest.mark.protects("model-attempts-as-registry")
 async def test_other_errors_are_not_retried(waits: list[float]) -> None:
     flaky = _Flaky(ValueError("bad input"), failures=5)
 
@@ -90,6 +93,7 @@ class _AlwaysTimesOut:
         return {"content": "hi", "model_id": entry.model_id}
 
 
+@pytest.mark.protects("model-attempts-as-registry")
 async def test_router_tries_a_model_retries_plus_one_times_then_the_next(
     waits: list[float],
 ) -> None:
@@ -124,6 +128,7 @@ def _factory(mode: str) -> Any:
     return ProviderFactory(Config(_env_file=None, mode=mode))  # type: ignore[call-arg]
 
 
+@pytest.mark.protects("model-attempts-as-registry")
 def test_openrouter_client_does_not_retry_by_itself(monkeypatch: pytest.MonkeyPatch) -> None:
     from whitespace.models import providers
 
@@ -135,6 +140,7 @@ def test_openrouter_client_does_not_retry_by_itself(monkeypatch: pytest.MonkeyPa
     assert made[0]["max_retries"] == 0
 
 
+@pytest.mark.protects("model-attempts-as-registry")
 def test_bedrock_client_does_not_retry_by_itself(monkeypatch: pytest.MonkeyPatch) -> None:
     made: list[dict[str, Any]] = []
     monkeypatch.setattr("boto3.client", lambda *args, **kwargs: made.append(kwargs))
