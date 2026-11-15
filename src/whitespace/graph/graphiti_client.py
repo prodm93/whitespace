@@ -17,7 +17,9 @@ from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.llm_client.openai_client import OpenAIClient
+from openai import AsyncOpenAI
 
+from whitespace.closing import Closer, close_all
 from whitespace.config import Config
 from whitespace.graph.neo4j_client import Neo4jClient
 
@@ -33,6 +35,7 @@ class GraphitiClient:
         self._config = config
         self._neo4j = neo4j
         self._graphiti: Graphiti | None = None
+        self._http_closers: list[Closer] = []
 
     async def initialise(self) -> None:
         if self._graphiti is not None:
@@ -48,24 +51,30 @@ class GraphitiClient:
             password=self._config.neo4j_password,
             database=self._config.neo4j_database or "neo4j",
         )
+        model_http = AsyncOpenAI(api_key=api_key, base_url=_OPENROUTER_BASE_URL)
+        embedder_http = AsyncOpenAI(api_key=api_key, base_url=_OPENROUTER_BASE_URL)
+        reranker_http = AsyncOpenAI(api_key=api_key, base_url=_OPENROUTER_BASE_URL)
         llm_client = OpenAIClient(
             config=LLMConfig(
                 api_key=api_key,
                 model=self._config.graphiti_model,
                 base_url=_OPENROUTER_BASE_URL,
             ),
+            client=model_http,
         )
         embedder = OpenAIEmbedder(
             config=OpenAIEmbedderConfig(
                 api_key=api_key,
                 base_url=_OPENROUTER_BASE_URL,
             ),
+            client=embedder_http,
         )
         cross_encoder = OpenAIRerankerClient(
             config=LLMConfig(
                 api_key=api_key,
                 base_url=_OPENROUTER_BASE_URL,
             ),
+            client=reranker_http,
         )
 
         logger.info("GraphitiClient: initialising")
@@ -75,6 +84,11 @@ class GraphitiClient:
             embedder=embedder,
             cross_encoder=cross_encoder,
         )
+        self._http_closers = [
+            ("Graphiti model client", model_http.close),
+            ("Graphiti embedder client", embedder_http.close),
+            ("Graphiti reranker client", reranker_http.close),
+        ]
 
     async def ensure_indices_and_constraints(self) -> None:
         if self._graphiti is None:
@@ -84,14 +98,17 @@ class GraphitiClient:
         await self._graphiti.build_indices_and_constraints()
 
     async def close(self) -> None:
+        """Close Graphiti, then its model, embedder and reranker HTTP clients.
+
+        The handles are cleared first. Every close is attempted, each within its time
+        limit; an interruption of one is raised after the others.
+        """
         if self._graphiti is None:
             return
-        try:
-            await self._graphiti.close()  # type: ignore[no-untyped-call]
-        except Exception:
-            logger.exception("GraphitiClient: error closing")
-        finally:
-            self._graphiti = None
+        graphiti, http_closers = self._graphiti, self._http_closers
+        self._graphiti = None
+        self._http_closers = []
+        await close_all([("Graphiti", graphiti.close), *http_closers])
 
     @property
     def graphiti(self) -> Graphiti:
