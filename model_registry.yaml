@@ -28,14 +28,14 @@
 
 orchestrator:
   models:
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+    - model_id: "anthropic.claude-opus-4-6-v1"
       provider: anthropic
       timeout_seconds: 120
       retries: 2
       pricing:
         input_per_1m: 15.00
         output_per_1m: 75.00
-    - model_id: "gpt-5.4"
+    - model_id: "openai.gpt-5.4"
       provider: openai
       timeout_seconds: 120
       retries: 2
@@ -45,21 +45,21 @@ orchestrator:
 
 gap_identifier_1:
   models:
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+    - model_id: "anthropic.claude-opus-4-6-v1"
       provider: anthropic
       timeout_seconds: 120
       retries: 2
       pricing:
         input_per_1m: 15.00
         output_per_1m: 75.00
-    - model_id: "gpt-5.4"
+    - model_id: "openai.gpt-5.4"
       provider: openai
       timeout_seconds: 120
       retries: 2
       pricing:
         input_per_1m: 2.50
         output_per_1m: 10.00
-    - model_id: "deepseek.deepseek-v3-2-v1:0"
+    - model_id: "deepseek.v3.2"
       provider: deepseek
       timeout_seconds: 120
       retries: 2
@@ -83,7 +83,7 @@ gap_identifier_2:
       pricing:
         input_per_1m: 0.60
         output_per_1m: 2.50
-    - model_id: "amazon.nova-2-micro-v1:0"
+    - model_id: "amazon.nova-micro-v1:0"
       provider: amazon
       timeout_seconds: 60
       retries: 2
@@ -107,7 +107,7 @@ gap_identifier_3:
       pricing:
         input_per_1m: 1.00
         output_per_1m: 3.20
-    - model_id: "deepseek.deepseek-v3-2-v1:0"
+    - model_id: "deepseek.v3.2"
       provider: deepseek
       timeout_seconds: 120
       retries: 2
@@ -142,7 +142,7 @@ gap_critic:
 
 gap_synthesiser:
   models:
-    - model_id: "deepseek.deepseek-v3-2-v1:0"
+    - model_id: "deepseek.v3.2"
       provider: deepseek
       timeout_seconds: 120
       retries: 2
@@ -168,7 +168,7 @@ gap_synthesiser:
 # chain during the final registry allocation alongside every other agent role.
 question_gate:
   models:
-    - model_id: "deepseek.deepseek-v3-2-v1:0"
+    - model_id: "deepseek.v3.2"
       provider: deepseek
       timeout_seconds: 120
       retries: 2
@@ -192,14 +192,14 @@ question_gate:
 
 idea_ideator_1:
   models:
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+    - model_id: "anthropic.claude-opus-4-6-v1"
       provider: anthropic
       timeout_seconds: 180
       retries: 2
       pricing:
         input_per_1m: 15.00
         output_per_1m: 75.00
-    - model_id: "gpt-5.4"
+    - model_id: "openai.gpt-5.4"
       provider: openai
       timeout_seconds: 180
       retries: 2
@@ -209,14 +209,14 @@ idea_ideator_1:
 
 idea_ideator_2:
   models:
-    - model_id: "gpt-5.4"
+    - model_id: "openai.gpt-5.4"
       provider: openai
       timeout_seconds: 180
       retries: 2
       pricing:
         input_per_1m: 2.50
         output_per_1m: 10.00
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+    - model_id: "anthropic.claude-opus-4-6-v1"
       provider: anthropic
       timeout_seconds: 180
       retries: 2
@@ -240,7 +240,7 @@ idea_ideator_3:
       pricing:
         input_per_1m: 1.00
         output_per_1m: 3.20
-    - model_id: "deepseek.deepseek-v3-2-v1:0"
+    - model_id: "deepseek.v3.2"
       provider: deepseek
       timeout_seconds: 180
       retries: 2
@@ -275,7 +275,7 @@ idea_critic:
 
 idea_synthesiser:
   models:
-    - model_id: "deepseek.deepseek-v3-2-v1:0"
+    - model_id: "deepseek.v3.2"
       provider: deepseek
       timeout_seconds: 180
       retries: 2
@@ -299,7 +299,7 @@ idea_synthesiser:
 
 prior_art_checker:
   models:
-    - model_id: "deepseek.deepseek-v3-2-v1:0"
+    - model_id: "deepseek.v3.2"
       provider: deepseek
       timeout_seconds: 120
       retries: 2
@@ -327,7 +327,7 @@ profile_extractor:
       pricing:
         input_per_1m: 1.00
         output_per_1m: 3.20
-    - model_id: "amazon.nova-2-micro-v1:0"
+    - model_id: "amazon.nova-micro-v1:0"
       provider: amazon
       timeout_seconds: 60
       retries: 3
@@ -337,14 +337,14 @@ profile_extractor:
 
 ontology_inference:
   models:
-    - model_id: "gpt-5.4"
+    - model_id: "openai.gpt-5.4"
       provider: openai
       timeout_seconds: 120
       retries: 3
       pricing:
         input_per_1m: 2.50
         output_per_1m: 10.00
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+    - model_id: "anthropic.claude-opus-4-6-v1"
       provider: anthropic
       timeout_seconds: 120
       retries: 3
@@ -354,7 +354,7 @@ ontology_inference:
 
 search_query_generator:
   models:
-    - model_id: "amazon.nova-2-micro-v1:0"
+    - model_id: "amazon.nova-micro-v1:0"
       provider: amazon
       timeout_seconds: 30
       retries: 2
@@ -371,14 +371,14 @@ search_query_generator:
 
 generator:
   models:
-    - model_id: "anthropic.claude-opus-4-6-20260219-v1:0"
+    - model_id: "anthropic.claude-opus-4-6-v1"
       provider: anthropic
       timeout_seconds: 120
       retries: 2
       pricing:
         input_per_1m: 15.00
         output_per_1m: 75.00
-    - model_id: "gpt-5.4"
+    - model_id: "openai.gpt-5.4"
       provider: openai
       timeout_seconds: 120
       retries: 2
@@ -395,7 +395,7 @@ retrieval_planner:
       pricing:
         input_per_1m: 1.00
         output_per_1m: 3.20
-    - model_id: "amazon.nova-2-micro-v1:0"
+    - model_id: "amazon.nova-micro-v1:0"
       provider: amazon
       timeout_seconds: 30
       retries: 3

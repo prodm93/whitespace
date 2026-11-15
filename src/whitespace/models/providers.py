@@ -22,18 +22,28 @@ logger = logging.getLogger(__name__)
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 _OPENROUTER_MODEL_MAP: dict[str, str] = {
-    "anthropic.claude-opus-4-6-20260219-v1:0": "anthropic/claude-opus-4.6",
+    "anthropic.claude-opus-4-6-v1": "anthropic/claude-opus-4.6",
     "anthropic.claude-opus-4-8": "anthropic/claude-opus-4.8",
     "anthropic.claude-sonnet-4-6": "anthropic/claude-sonnet-4.6",
-    "gpt-5.4": "openai/gpt-5.4",
-    "deepseek.deepseek-v3-2-v1:0": "deepseek/deepseek-v3.2",
+    "openai.gpt-5.4": "openai/gpt-5.4",
+    "deepseek.v3.2": "deepseek/deepseek-v3.2",
     "zai.glm-5": "z-ai/glm-5",
     "moonshot.kimi-k2-thinking": "moonshotai/kimi-k2-thinking",
     "mistral.mistral-large-3-675b-instruct": "mistralai/mistral-large-2512",
-    "amazon.nova-2-micro-v1:0": "amazon/nova-micro-v1",
+    "amazon.nova-micro-v1:0": "amazon/nova-micro-v1",
     "amazon.nova-2-lite-v1:0": "amazon/nova-2-lite-v1",
     "amazon.nova-pro-v1:0": "amazon/nova-pro-v1",
 }
+
+_BEDROCK_PROFILE_ONLY: frozenset[str] = frozenset(
+    {
+        "anthropic.claude-opus-4-6-v1",
+        "anthropic.claude-opus-4-8",
+        "anthropic.claude-sonnet-4-6",
+        "openai.gpt-5.4",
+        "amazon.nova-2-lite-v1:0",
+    }
+)
 
 TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
     APITimeoutError,
@@ -79,6 +89,13 @@ class ProviderFactory:
             return mapped
         return f"{entry.provider}/{entry.model_id}"
 
+    def _resolve_bedrock_model(self, entry: ModelEntry) -> str:
+        """Return the ``us.`` inference profile ID for a model that Bedrock serves only
+        through a profile, and the registry ID for every other model."""
+        if entry.model_id in _BEDROCK_PROFILE_ONLY:
+            return f"us.{entry.model_id}"
+        return entry.model_id
+
     async def call(
         self,
         entry: ModelEntry,
@@ -91,7 +108,7 @@ class ProviderFactory:
         if self._config.mode == "saas":
             return await call_bedrock(
                 self._get_bedrock_client(),
-                entry.model_id,
+                self._resolve_bedrock_model(entry),
                 entry,
                 messages,
                 temperature,
