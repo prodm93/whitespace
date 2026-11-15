@@ -43,10 +43,13 @@ jobs:
       - name: Pytest
         run: |
           if [ -d tests ]; then
-            pytest --tb=short -q
+            pytest --tb=short -q --cov --cov-report=term --cov-report=json:coverage.json
           else
             echo "No tests yet, skipping."
           fi
+
+      - name: Coverage gates
+        run: python scripts/coverage_gates.py
 
       - name: Set up Node
         uses: actions/setup-node@v4
