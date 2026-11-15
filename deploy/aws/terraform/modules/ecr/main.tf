@@ -1,5 +1,5 @@
 resource "aws_ecr_repository" "backend" {
-  name                 = "${var.name_prefix}-backend"
+  name = "${var.name_prefix}-backend"
   # Immutable tags prevent image mutation attacks
   image_tag_mutability = "IMMUTABLE"
   force_delete         = false

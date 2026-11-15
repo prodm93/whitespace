@@ -22,18 +22,3 @@ output "results_bucket" {
   description = "S3 bucket for job results"
   value       = module.storage.results_bucket_name
 }
-
-output "ingest_queue_url" {
-  description = "SQS ingest queue URL"
-  value       = module.queue.ingest_queue_url
-}
-
-output "gap_council_queue_url" {
-  description = "SQS gap council queue URL"
-  value       = module.queue.gap_council_queue_url
-}
-
-output "ideation_council_queue_url" {
-  description = "SQS ideation council queue URL"
-  value       = module.queue.ideation_council_queue_url
-}

@@ -117,8 +117,8 @@ resource "aws_lambda_function" "pipeline_orchestrator" {
   memory_size   = 2048
 
   durable_config {
-    execution_timeout        = 86400
-    retention_period_in_days = 7
+    execution_timeout = 86400
+    retention_period  = 7
   }
 
   environment {
@@ -144,14 +144,14 @@ resource "aws_lambda_alias" "pipeline_live" {
 # ---------- Durable Dispatcher ----------
 
 resource "aws_lambda_function" "durable_dispatcher" {
-  function_name = "${var.name_prefix}-durable-dispatcher"
-  role          = aws_iam_role.dispatcher.arn
-  runtime       = "python3.12"
-  handler       = "handler.handler"
+  function_name    = "${var.name_prefix}-durable-dispatcher"
+  role             = aws_iam_role.dispatcher.arn
+  runtime          = "python3.12"
+  handler          = "handler.handler"
   filename         = "${var.lambda_build_dir}/durable_dispatcher.zip"
   source_code_hash = filebase64sha256("${var.lambda_build_dir}/durable_dispatcher.zip")
-  timeout       = 60
-  memory_size   = 128
+  timeout          = 60
+  memory_size      = 128
 
   environment {
     variables = {

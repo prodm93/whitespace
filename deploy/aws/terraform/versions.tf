@@ -4,7 +4,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 6.0" # durable_config requires provider v6; plan before deploy
+      version = ">= 6.25.0, < 7.0.0" # durable_config needs provider 6.25.0 or later
     }
   }
 }
@@ -19,7 +19,7 @@ provider "aws" {
 
 provider "aws" {
   alias  = "us_east_1"
-  region = "sa-east-1"
+  region = "us-east-1"
 
   default_tags {
     tags = local.common_tags
