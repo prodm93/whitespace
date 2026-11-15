@@ -60,79 +60,79 @@ def _finding() -> RawFinding:
 class TestGapRunItem:
     def test_round_trip(self) -> None:
         run = _gap_run()
-        item = items.gap_run_to_item(run)
+        item = items.gap_run_to_item("user_a", run)
         assert items.item_to_gap_run(item) == run
 
     def test_partition_key(self) -> None:
-        item = items.gap_run_to_item(_gap_run())
-        assert item["pk"] == items.GAPRUN_PK
+        item = items.gap_run_to_item("user_a", _gap_run())
+        assert item["pk"] == "USER#user_a#GAPRUN"
 
     def test_sort_key_carries_timestamp_and_run_id(self) -> None:
         run = _gap_run()
-        item = items.gap_run_to_item(run)
+        item = items.gap_run_to_item("user_a", run)
         assert item["sk"] == f"{run.timestamp.isoformat()}#{run.run_id}"
 
     def test_needs_extracted_from_item(self) -> None:
-        item = items.gap_run_to_item(_gap_run())
+        item = items.gap_run_to_item("user_a", _gap_run())
         assert items.needs_from_gap_run_item(item) == [SAMPLE_NEED]
 
 
 class TestIdeaRunItem:
     def test_round_trip(self) -> None:
         run = _idea_run()
-        item = items.idea_run_to_item(run)
+        item = items.idea_run_to_item("user_a", run)
         assert items.item_to_idea_run(item) == run
 
     def test_partition_key(self) -> None:
-        item = items.idea_run_to_item(_idea_run())
-        assert item["pk"] == items.IDEARUN_PK
+        item = items.idea_run_to_item("user_a", _idea_run())
+        assert item["pk"] == "USER#user_a#IDEARUN"
 
     def test_gap_run_id_carried_as_own_attribute(self) -> None:
         run = _idea_run()
-        item = items.idea_run_to_item(run)
+        item = items.idea_run_to_item("user_a", run)
         assert item["gap_run_id"] == run.gap_run_id
 
     def test_proposals_extracted_from_item(self) -> None:
-        item = items.idea_run_to_item(_idea_run())
+        item = items.idea_run_to_item("user_a", _idea_run())
         assert items.proposals_from_idea_run_item(item) == [SAMPLE_PROPOSAL]
 
 
 class TestFindingItem:
     def test_round_trip(self) -> None:
         finding = _finding()
-        item = items.finding_to_item("gap-run-1", finding)
+        item = items.finding_to_item("user_a", "gap-run-1", finding)
         assert items.item_to_finding(item) == finding
 
     def test_partition_key(self) -> None:
-        item = items.finding_to_item("gap-run-1", _finding())
-        assert item["pk"] == items.FINDINGS_PK
+        item = items.finding_to_item("user_a", "gap-run-1", _finding())
+        assert item["pk"] == "USER#user_a#FINDINGS"
 
     def test_run_id_carried_as_own_attribute(self) -> None:
-        item = items.finding_to_item("gap-run-1", _finding())
+        item = items.finding_to_item("user_a", "gap-run-1", _finding())
         assert item["run_id"] == "gap-run-1"
 
     def test_sort_key_starts_with_found_at(self) -> None:
         finding = _finding()
-        item = items.finding_to_item("gap-run-1", finding)
+        item = items.finding_to_item("user_a", "gap-run-1", finding)
         assert item["sk"].startswith(finding.found_at.isoformat())
 
 
 class TestDiscardItem:
     def test_round_trip(self) -> None:
         entry = {"title": "Duplicate idea", "description": "Same as an earlier candidate"}
-        item = items.discard_to_item("idea-run-1", "idea", entry)
+        item = items.discard_to_item("user_a", "idea-run-1", "idea", entry)
         discard = items.item_to_discard(item)
         assert discard["title"] == entry["title"]
         assert discard["description"] == entry["description"]
         assert discard["kind"] == "idea"
 
     def test_partition_key_scoped_to_kind(self) -> None:
-        item = items.discard_to_item("idea-run-1", "idea", {})
-        assert item["pk"] == items.discard_pk("idea")
-        assert item["pk"] != items.discard_pk("gap")
+        item = items.discard_to_item("user_a", "idea-run-1", "idea", {})
+        assert item["pk"] == "USER#user_a#DISCARD#idea"
+        assert item["pk"] != "USER#user_a#DISCARD#gap"
 
     def test_missing_fields_default_to_empty_string(self) -> None:
-        item = items.discard_to_item("idea-run-1", "idea", {})
+        item = items.discard_to_item("user_a", "idea-run-1", "idea", {})
         discard = items.item_to_discard(item)
         assert discard["title"] == ""
         assert discard["reason"] == ""
@@ -146,24 +146,24 @@ class TestGapRunDomain:
             needs=[],
             domain="lithium-ion batteries",
         )
-        item = items.gap_run_to_item(run)
+        item = items.gap_run_to_item("user_a", run)
         assert items.item_to_gap_run(item).domain == "lithium-ion batteries"
 
     def test_none_domain_survives_round_trip(self) -> None:
         run = GapRun(run_id="r2", timestamp=datetime(2026, 7, 1, tzinfo=UTC), needs=[], domain=None)
-        item = items.gap_run_to_item(run)
+        item = items.gap_run_to_item("user_a", run)
         assert items.item_to_gap_run(item).domain is None
 
 
 class TestDiscardDomain:
     def test_domain_stored_and_returned(self) -> None:
         entry = {"title": "T", "description": "D", "reason": "R", "domain": "robotics"}
-        item = items.discard_to_item("r1", "gap", entry)
+        item = items.discard_to_item("user_a", "r1", "gap", entry)
         discard = items.item_to_discard(item)
         assert discard["domain"] == "robotics"
 
     def test_missing_domain_defaults_to_empty_string(self) -> None:
-        item = items.discard_to_item("r1", "gap", {"title": "T", "description": "D"})
+        item = items.discard_to_item("user_a", "r1", "gap", {"title": "T", "description": "D"})
         assert items.item_to_discard(item)["domain"] == ""
 
 
@@ -171,8 +171,8 @@ class TestSortKeyOrdering:
     def test_later_gap_run_sorts_after_earlier_as_plain_string(self) -> None:
         earlier = GapRun(run_id="a", timestamp=datetime(2026, 1, 1, tzinfo=UTC), needs=[])
         later = GapRun(run_id="b", timestamp=datetime(2026, 6, 1, tzinfo=UTC), needs=[])
-        earlier_sk = items.gap_run_to_item(earlier)["sk"]
-        later_sk = items.gap_run_to_item(later)["sk"]
+        earlier_sk = items.gap_run_to_item("user_a", earlier)["sk"]
+        later_sk = items.gap_run_to_item("user_a", later)["sk"]
         assert earlier_sk < later_sk
 
     def test_later_finding_sorts_after_earlier_as_plain_string(self) -> None:
@@ -192,6 +192,6 @@ class TestSortKeyOrdering:
             query="q",
             found_at=datetime(2026, 6, 1, tzinfo=UTC),
         )
-        earlier_sk = items.finding_to_item("run", earlier)["sk"]
-        later_sk = items.finding_to_item("run", later)["sk"]
+        earlier_sk = items.finding_to_item("user_a", "run", earlier)["sk"]
+        later_sk = items.finding_to_item("user_a", "run", later)["sk"]
         assert earlier_sk < later_sk

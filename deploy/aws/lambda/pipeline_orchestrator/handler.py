@@ -7,7 +7,6 @@ accumulates from step return values only.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
@@ -23,6 +22,8 @@ from _reservation_state import (
     ReservationStateError,
     _validate_and_start,
 )
+from _runtime import finish_run, open_run, run
+from _uploads import UploadPathError, owned_keys
 from aws_durable_execution_sdk_python import DurableContext, durable_execution
 
 from whitespace.agents.orchestrator_agent import _SYSTEM_PROMPT
@@ -63,8 +64,13 @@ def handler(event: dict, context: DurableContext) -> dict:
         if reservation_mode == "required":
             context.step(lambda _: _validate_usage_config(), name="validate_usage_config")
 
+        for field in ("profile_paths", "doc_paths"):
+            if not owned_keys(payload.get(field, []), user_id):
+                raise UploadPathError("Invalid upload path")
+
+        run(open_run(user_id))
         prior: dict[str, Any] = context.step(
-            lambda _: asyncio.run(_rehydrate(payload)),
+            lambda _: run(_rehydrate(payload)),
             name="rehydrate_session",
         )
 
@@ -89,7 +95,7 @@ def handler(event: dict, context: DurableContext) -> dict:
         for i in range(_MAX_TOOL_CALLS):
             msgs = list(messages)
             decision: dict[str, Any] = context.step(
-                (lambda _, ms=msgs: asyncio.run(_decide(ms))),
+                (lambda _, ms=msgs: run(_decide(ms))),
                 name=f"decide-{i}",
             )
             if decision["type"] == "stop":
@@ -155,3 +161,6 @@ def handler(event: dict, context: DurableContext) -> dict:
             reservation_done=reservation_done,
         )
         raise
+
+    finally:
+        finish_run()

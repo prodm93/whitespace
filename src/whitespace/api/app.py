@@ -95,12 +95,9 @@ def _build_store(config: Config) -> SessionStore:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         return SqliteSessionStore(db_path)
 
-    if config.sessions_table:
-        from whitespace.store.dynamo_store import DynamoSessionStore
-
-        return DynamoSessionStore(config.sessions_table, config.aws_region)
-
-    logger.warning("SESSIONS_TABLE not set; SaaS session persistence is disabled")
+    logger.warning(
+        "SaaS mode: the API keeps no session store; each Lambda builds its own store for its tenant"
+    )
     from whitespace.store.noop_store import NoopSessionStore
 
     return NoopSessionStore()

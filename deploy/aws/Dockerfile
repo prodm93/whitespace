@@ -26,7 +26,11 @@ COPY deploy/aws/lambda/pipeline_orchestrator/handler.py \
      deploy/aws/lambda/pipeline_orchestrator/_gap_step.py \
      deploy/aws/lambda/pipeline_orchestrator/_reservation_ops.py \
      deploy/aws/lambda/pipeline_orchestrator/_dispatch.py \
+     deploy/aws/lambda/pipeline_orchestrator/_connection.py \
      deploy/aws/lambda/pipeline_orchestrator/_failure.py \
+     deploy/aws/lambda/pipeline_orchestrator/_runtime.py \
+     deploy/aws/lambda/pipeline_orchestrator/_teardown.py \
+     deploy/aws/lambda/pipeline_orchestrator/_uploads.py \
      deploy/aws/lambda/pipeline_orchestrator/_loop.py ./
 
 ENV MODE=saas

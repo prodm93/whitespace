@@ -16,30 +16,31 @@ from _saas_helpers import (
     _evt,
     _handler_boto3,
     _tc,
+    install_runtime,
 )
 
 
 @pytest.fixture(autouse=True)
-def patch_actions(monkeypatch: Any) -> None:
+def patch_actions(monkeypatch: Any, request: Any) -> FakePipeline:
     import _actions
     import _reservation_ops
 
-    monkeypatch.setattr(_actions, "_pipeline", FakePipeline())
-    monkeypatch.setattr(_actions, "_session_store", FakeStore())
-    monkeypatch.setattr(_actions, "_ensure_init", AsyncMock())
-    monkeypatch.setattr(_actions, "_localise_paths", AsyncMock(side_effect=lambda p: p))
+    fake = FakePipeline()
+    install_runtime(monkeypatch, fake, FakeStore(), request)
+    monkeypatch.setattr(
+        _actions, "localise_paths", AsyncMock(side_effect=lambda paths, _owner: paths)
+    )
     monkeypatch.setattr(_reservation_ops, "_USAGE_TABLE", "usage-t")
+    return fake
 
 
 @pytest.fixture()
-def pipeline() -> FakePipeline:
-    import _actions
-
-    return _actions._pipeline  # type: ignore[attr-defined]
+def pipeline(patch_actions: FakePipeline) -> FakePipeline:
+    return patch_actions
 
 
+@pytest.mark.protects("run-slot-counted-on-gap-run")
 def test_gap_success_fires_convert(monkeypatch: Any, pipeline: FakePipeline) -> None:
-    import _actions
     import _reservation_state
     import handler
 
@@ -52,23 +53,22 @@ def test_gap_success_fires_convert(monkeypatch: Any, pipeline: FakePipeline) -> 
             _DONE,
         ]
     )
-    monkeypatch.setattr(_actions, "_pipeline", pipeline)
     monkeypatch.setattr(_reservation_state, "_JOBS_TABLE", "j")
     fb = _handler_boto3(with_reservation=True)
     monkeypatch.setitem(sys.modules, "boto3", fb)
     ctx = FakeDurableContext()
-    handler.handler(_evt("j3", "Run gaps", user_id="u1", profile_paths=["cv.pdf"]), ctx)
+    handler.handler(_evt("j3", "Run gaps", user_id="u1", profile_paths=["uploads/u1/cv.pdf"]), ctx)
     assert "convert_reservation" in ctx.step_calls
 
 
-def test_blocked_gap_releases_reservation(monkeypatch: Any) -> None:
-    import _actions
+@pytest.mark.protects("run-slot-counted-on-gap-run")
+def test_blocked_gap_releases_reservation(monkeypatch: Any, request: Any) -> None:
     import _reservation_state
     import handler
 
     fp = FakePipeline()
     fp.router = FakeRouter([_tc("run_gap_analysis"), _DONE])
-    monkeypatch.setattr(_actions, "_pipeline", fp)
+    install_runtime(monkeypatch, fp, FakeStore(), request)
     monkeypatch.setattr(_reservation_state, "_JOBS_TABLE", "j")
     fb = _handler_boto3(with_reservation=True)
     monkeypatch.setitem(sys.modules, "boto3", fb)
@@ -78,8 +78,8 @@ def test_blocked_gap_releases_reservation(monkeypatch: Any) -> None:
     assert "release_reservation_blocked" in ctx.step_calls
 
 
+@pytest.mark.protects("run-slot-returned-on-failure")
 def test_query_only_releases_unused(monkeypatch: Any, pipeline: FakePipeline) -> None:
-    import _actions
     import _reservation_state
     import handler
 
@@ -90,7 +90,6 @@ def test_query_only_releases_unused(monkeypatch: Any, pipeline: FakePipeline) ->
             _DONE,
         ]
     )
-    monkeypatch.setattr(_actions, "_pipeline", pipeline)
     monkeypatch.setattr(_reservation_state, "_JOBS_TABLE", "j")
     release = MagicMock()
     monkeypatch.setattr(handler, "_release_reservation", release)
@@ -103,7 +102,6 @@ def test_query_only_releases_unused(monkeypatch: Any, pipeline: FakePipeline) ->
 
 
 def test_unlimited_bypass_skips_reservation(monkeypatch: Any, pipeline: FakePipeline) -> None:
-    import _actions
     import _reservation_state
     import handler
 
@@ -116,12 +114,11 @@ def test_unlimited_bypass_skips_reservation(monkeypatch: Any, pipeline: FakePipe
             _DONE,
         ]
     )
-    monkeypatch.setattr(_actions, "_pipeline", pipeline)
     monkeypatch.setattr(_reservation_state, "_JOBS_TABLE", "j")
     fb = MagicMock()
     monkeypatch.setitem(sys.modules, "boto3", fb)
     monkeypatch.setattr(handler, "_validate_and_start", lambda _jid, _uid: "not_required")
     ctx = FakeDurableContext()
-    handler.handler(_evt("j6", "Run gaps", user_id="u1", profile_paths=["cv.pdf"]), ctx)
+    handler.handler(_evt("j6", "Run gaps", user_id="u1", profile_paths=["uploads/u1/cv.pdf"]), ctx)
     assert "validate_and_start" in ctx.step_calls
     assert "convert_reservation" not in ctx.step_calls

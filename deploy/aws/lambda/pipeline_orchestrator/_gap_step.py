@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from _actions import _gap_analysis_action
 from _reservation_ops import _convert_reservation, _release_reservation
 from _reservation_state import ReservationMode
+from _runtime import run
 from aws_durable_execution_sdk_python import DurableContext
 
 
@@ -27,11 +27,7 @@ def _handle_gap_analysis(
 
     s_snap = dict(session)
     action: dict[str, Any] = context.step(
-        (
-            lambda _, s=s_snap, jid=job_id, fs=fresh_start: asyncio.run(
-                _gap_analysis_action(jid, s, fs)
-            )
-        ),
+        (lambda _, s=s_snap, jid=job_id, fs=fresh_start: run(_gap_analysis_action(jid, s, fs))),
         name="gap_analysis",
     )
     session.update(action["session_updates"])

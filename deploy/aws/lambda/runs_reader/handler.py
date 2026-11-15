@@ -20,16 +20,35 @@ SESSIONS_TABLE = os.environ.get("SESSIONS_TABLE", "")
 RESULTS_BUCKET = os.environ.get("RESULTS_BUCKET", "")
 
 
+_JOB_ROUTE = "GET /api/jobs/{jobId}"
+_LATEST_ROUTE = "GET /api/runs/latest"
+
+
 def handler(event: dict, context: object) -> dict:
     route_key: str = event.get("routeKey", "")
-    if route_key == "GET /api/jobs/{jobId}":
-        return _get_job(event)
-    if route_key == "GET /api/runs/latest":
-        return _get_runs_latest()
-    return _response(404, {"error": f"Unknown route: {route_key}"})
+    if route_key not in (_JOB_ROUTE, _LATEST_ROUTE):
+        return _response(404, {"error": f"Unknown route: {route_key}"})
+    caller = _caller_id(event)
+    if not caller:
+        return _response(401, {"error": "Unauthenticated"})
+    if route_key == _JOB_ROUTE:
+        return _get_job(event, caller)
+    return _get_runs_latest(caller)
 
 
-def _get_job(event: dict) -> dict:
+def _caller_id(event: dict) -> str:
+    """Return the user ID that the authoriser set, or ``""`` when it is not a string."""
+    auth = ((event.get("requestContext") or {}).get("authorizer") or {}).get("lambda") or {}
+    user_id = auth.get("user_id")
+    return user_id if isinstance(user_id, str) else ""
+
+
+def _get_job(event: dict, caller: str) -> dict:
+    """Return the status and result of a job of ``caller``.
+
+    A job of a different user, a job with no owner and an unknown job get the same 404, so
+    a caller cannot tell which job IDs exist. The result is read only for the owner.
+    """
     path_params: dict = event.get("pathParameters") or {}
     job_id: str = path_params.get("jobId", "")
     if not job_id:
@@ -42,16 +61,10 @@ def _get_job(event: dict) -> dict:
     resp = dynamo.Table(JOBS_TABLE).get_item(Key={"job_id": job_id})
     item: dict | None = resp.get("Item")
 
-    if item is None:
-        return _response(
-            200,
-            {
-                "job_id": job_id,
-                "status": "failed",
-                "result": None,
-                "error": f"Unknown job_id={job_id}",
-            },
-        )
+    if item is None or item.get("user_id") != caller:
+        if item is not None:
+            logger.warning("Job %s was asked for by %s, who does not own it", job_id, caller)
+        return _response(404, {"error": "Job not found"})
 
     result: Any = None
     if "result_key" in item:
@@ -70,11 +83,12 @@ def _get_job(event: dict) -> dict:
     )
 
 
-def _get_runs_latest() -> dict:
+def _get_runs_latest(caller: str) -> dict:
+    """Return the latest gap run of ``caller`` and its ideation runs."""
     from whitespace.store.dynamo_store import DynamoSessionStore
 
     region = os.environ.get("AWS_REGION", "")
-    store = DynamoSessionStore(SESSIONS_TABLE, region)
+    store = DynamoSessionStore(SESSIONS_TABLE, region, owner=caller)
 
     gap_run = asyncio.run(store.get_latest_gap_run())
     if gap_run is None:

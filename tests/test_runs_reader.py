@@ -6,35 +6,17 @@ pipeline_orchestrator/handler.py on sys.path.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from _runs_reader_helpers import _event, _load
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
 from whitespace.store.base import GapRun, IdeaRun
-
-_HANDLER_PATH = (
-    Path(__file__).parent.parent / "deploy" / "aws" / "lambda" / "runs_reader" / "handler.py"
-)
-
-
-def _load() -> Any:
-    spec = importlib.util.spec_from_file_location("runs_reader_handler", _HANDLER_PATH)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
-    return mod
-
-
-def _event(route: str, job_id: str | None = None) -> dict:
-    return {
-        "routeKey": route,
-        "pathParameters": {"jobId": job_id} if job_id else None,
-    }
 
 
 def _need(title: str) -> UnmetNeed:
@@ -67,20 +49,7 @@ def test_missing_job_id_returns_400() -> None:
     assert json.loads(result["body"])["error"] == "jobId is required"
 
 
-def test_unknown_job_returns_byok_failed_shape() -> None:
-    fake_boto3 = MagicMock()
-    fake_boto3.resource.return_value.Table.return_value.get_item.return_value = {"Item": None}
-    with patch.dict(sys.modules, {"boto3": fake_boto3}):
-        mod = _load()
-        result = mod.handler(_event("GET /api/jobs/{jobId}", "no-such-job"), None)
-
-    body = json.loads(result["body"])
-    assert result["statusCode"] == 200
-    assert body["status"] == "failed"
-    assert body["result"] is None
-    assert "Unknown job_id=no-such-job" in body["error"]
-
-
+@pytest.mark.protects("job-status-shape")
 def test_completed_job_inlines_s3_result() -> None:
     payload = {"needs": [], "proposals": [], "status": "done", "reason": None}
     fake_s3_body = MagicMock(read=lambda: json.dumps(payload).encode())
@@ -89,6 +58,7 @@ def test_completed_job_inlines_s3_result() -> None:
     fake_boto3.resource.return_value.Table.return_value.get_item.return_value = {
         "Item": {
             "job_id": "j1",
+            "user_id": "user_a",
             "status": "completed",
             "result_key": "results/j1.json",
         }
@@ -117,6 +87,19 @@ def test_runs_latest_empty() -> None:
     assert result["statusCode"] == 200
     assert body["gap_run"] is None
     assert body["idea_runs"] == []
+
+
+@pytest.mark.protects("latest-run-owner-only")
+def test_runs_latest_builds_the_store_for_the_caller() -> None:
+    fake_store = MagicMock()
+    fake_store.get_latest_gap_run = AsyncMock(return_value=None)
+
+    with patch(
+        "whitespace.store.dynamo_store.DynamoSessionStore", return_value=fake_store
+    ) as store_class:
+        _load().handler(_event("GET /api/runs/latest", caller="user_b"), None)
+
+    assert store_class.call_args.kwargs["owner"] == "user_b"
 
 
 def test_runs_latest_populated() -> None:

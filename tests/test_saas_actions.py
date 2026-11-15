@@ -6,29 +6,32 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from _saas_helpers import FakePipeline, FakeStore, _need, _profile
+from _saas_helpers import FakePipeline, FakeStore, _need, _profile, install_runtime
 
 
 @pytest.fixture(autouse=True)
-def patch_actions(monkeypatch: Any) -> None:
+async def patch_actions(monkeypatch: Any, request: Any) -> FakePipeline:
     import _actions
+    import _runtime
 
-    monkeypatch.setattr(_actions, "_pipeline", FakePipeline())
-    monkeypatch.setattr(_actions, "_session_store", FakeStore())
-    monkeypatch.setattr(_actions, "_ensure_init", AsyncMock())
-    monkeypatch.setattr(_actions, "_localise_paths", AsyncMock(side_effect=lambda p: p))
+    fake = FakePipeline()
+    install_runtime(monkeypatch, fake, FakeStore(), request)
+    monkeypatch.setattr(
+        _actions, "localise_paths", AsyncMock(side_effect=lambda paths, _owner: paths)
+    )
+    await _runtime.open_run("u1")
+    return fake
 
 
 @pytest.fixture()
-def pipeline() -> FakePipeline:
-    import _actions
-
-    return _actions._pipeline  # type: ignore[attr-defined]
+def pipeline(patch_actions: FakePipeline) -> FakePipeline:
+    return patch_actions
 
 
 # --- _ideation_action ---
 
 
+@pytest.mark.protects("gap-selection-user-only")
 async def test_ideation_no_sidecar_is_guardrail_not_block() -> None:
     from _actions import _ideation_action
 
@@ -43,6 +46,7 @@ async def test_ideation_no_sidecar_is_guardrail_not_block() -> None:
     assert "sidecar" in r["summary"]
 
 
+@pytest.mark.protects("gap-selection-user-only")
 async def test_ideation_wrong_titles_is_guardrail_not_block() -> None:
     from _actions import _ideation_action
 
@@ -57,6 +61,7 @@ async def test_ideation_wrong_titles_is_guardrail_not_block() -> None:
     assert "confirmed" in r["summary"]
 
 
+@pytest.mark.protects("missing-input-blocks-with-reason")
 async def test_ideation_no_needs_sets_blocked_reason() -> None:
     from _actions import _ideation_action
 
@@ -70,6 +75,7 @@ async def test_ideation_no_needs_sets_blocked_reason() -> None:
     assert r["session_updates"].get("blocked_reason") is not None
 
 
+@pytest.mark.protects("missing-input-blocks-with-reason")
 async def test_ideation_no_profile_sets_blocked_reason() -> None:
     from _actions import _ideation_action
 
@@ -103,6 +109,7 @@ async def test_ideation_valid_sidecar_calls_pipeline(
 # --- _gap_analysis_action ---
 
 
+@pytest.mark.protects("missing-input-blocks-with-reason")
 async def test_gap_analysis_no_profile_sets_blocked() -> None:
     from _actions import _gap_analysis_action
 
@@ -114,6 +121,7 @@ async def test_gap_analysis_no_profile_sets_blocked() -> None:
     assert r["session_updates"].get("blocked_reason") is not None
 
 
+@pytest.mark.protects("missing-input-blocks-with-reason")
 async def test_gap_analysis_no_domain_sets_blocked() -> None:
     from _actions import _gap_analysis_action
 
@@ -148,39 +156,28 @@ async def test_gap_analysis_success(pipeline: FakePipeline) -> None:
     assert r["session_updates"].get("blocked_reason") is None
 
 
-# --- _compute_final_result ---
+async def test_extract_profile_downloads_as_the_tenant_of_the_open_run() -> None:
+    import _actions
+    from _actions import _extract_profile_action
+
+    await _extract_profile_action({"profile_paths": ["uploads/u1/cv.pdf"]})
+
+    _actions.localise_paths.assert_awaited_once_with(["uploads/u1/cv.pdf"], "u1")  # type: ignore[attr-defined]
 
 
-def test_final_result_done_when_proposals() -> None:
-    from _loop import _compute_final_result
+async def test_gap_analysis_downloads_as_the_tenant_of_the_open_run() -> None:
+    import _actions
+    from _actions import _gap_analysis_action
 
-    r = _compute_final_result({"proposals": [{"title": "x"}], "needs": [], "blocked_reason": None})
-    assert r["status"] == "done"
-
-
-def test_final_result_blocked_beats_awaiting() -> None:
-    from _loop import _compute_final_result
-
-    r = _compute_final_result(
+    await _gap_analysis_action(
+        "j1",
         {
-            "proposals": [],
-            "needs": [{"title": "x"}],
-            "blocked_reason": "need profile",
-        }
+            "profile": _profile().model_dump(),
+            "domain": "AI",
+            "doc_paths": ["uploads/u1/paper.pdf"],
+            "keep_findings": False,
+        },
+        False,
     )
-    assert r["status"] == "blocked"
-    assert r["reason"] == "need profile"
 
-
-def test_final_result_awaiting_when_needs_no_proposals() -> None:
-    from _loop import _compute_final_result
-
-    r = _compute_final_result({"proposals": [], "needs": [{"title": "x"}], "blocked_reason": None})
-    assert r["status"] == "awaiting_selection"
-
-
-def test_final_result_done_when_nothing() -> None:
-    from _loop import _compute_final_result
-
-    r = _compute_final_result({"proposals": [], "needs": [], "blocked_reason": None})
-    assert r["status"] == "done"
+    _actions.localise_paths.assert_awaited_once_with(["uploads/u1/paper.pdf"], "u1")  # type: ignore[attr-defined]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,6 +13,7 @@ from _actions import (
 from _gap_step import _handle_gap_analysis
 from _loop import _compute_status
 from _reservation_state import ReservationMode
+from _runtime import run
 from aws_durable_execution_sdk_python import DurableContext
 
 
@@ -67,7 +67,7 @@ def dispatch_tool(
     if name == "query_knowledge_graph":
         q = str(args.get("question", ""))
         r = context.step(
-            (lambda _, question=q: asyncio.run(_query_action(question))),
+            (lambda _, question=q: run(_query_action(question))),
             name=f"query-{loop_index}",
         )
         return ToolResult(result=r)
@@ -93,7 +93,7 @@ def _handle_extract_profile(
 ) -> ToolResult:
     s_snap = dict(session)
     action: dict[str, Any] = context.step(
-        (lambda _, s=s_snap: asyncio.run(_extract_profile_action(s))),
+        (lambda _, s=s_snap: run(_extract_profile_action(s))),
         name="extract_profile",
     )
     session.update(action["session_updates"])
@@ -143,7 +143,7 @@ def _handle_ideation(
     a_snap = dict(args)
     action: dict[str, Any] = context.step(
         (
-            lambda _, s=s_snap, a=a_snap, jid=job_id, fs=fresh_start: asyncio.run(
+            lambda _, s=s_snap, a=a_snap, jid=job_id, fs=fresh_start: run(
                 _ideation_action(jid, s, a, fs)
             )
         ),

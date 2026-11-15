@@ -7,15 +7,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from _actions import _ensure_init, _get_pipeline
+from _runtime import get_pipeline
 
 from whitespace.agents._orchestrator_tool_defs import TOOL_DEFINITIONS
 
 
 async def _decide(messages: list[dict[str, Any]]) -> dict[str, Any]:
     """Call the model for one orchestrator turn; return the decision."""
-    await _ensure_init()
-    pipeline = _get_pipeline()
+    pipeline = get_pipeline()
     resp = await pipeline.router.call(
         role="orchestrator",
         messages=messages,

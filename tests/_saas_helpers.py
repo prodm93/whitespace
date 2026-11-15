@@ -128,6 +128,40 @@ class FakeStore:
         return self._gap_run
 
 
+def install_runtime(monkeypatch: Any, pipeline: Any, store: Any, request: Any) -> None:
+    """Point the pipeline function's runtime at fakes; nothing connects or reads ``.env``."""
+    import _runtime
+    from _runtime_helpers import FakeShared
+
+    from whitespace.config import Config
+
+    monkeypatch.setattr(_runtime, "build_shared", lambda _config: FakeShared())
+    monkeypatch.setattr(
+        _runtime, "Pipeline", types.SimpleNamespace(from_shared=lambda *_a, **_kw: pipeline)
+    )
+    monkeypatch.setattr(_runtime, "_build_session_store", lambda _config, _owner: store)
+    monkeypatch.setattr(_runtime, "Config", lambda: Config(_env_file=None, mode="saas"))
+    for name in ("_shared", "_run", "_store", "_owner", "_loop"):
+        monkeypatch.setattr(_runtime, name, None)
+    monkeypatch.setattr(_runtime, "_reopen_for", None)
+    monkeypatch.setattr(_runtime, "_kept_tasks", set())
+
+    def _close_test_loop() -> None:
+        loop = _runtime._loop
+        if loop is not None and not loop.is_closed():
+            loop.close()
+
+    request.addfinalizer(_close_test_loop)
+
+
+def fake_runtime(monkeypatch: Any, request: Any) -> types.ModuleType:
+    """Return the runtime module of the pipeline function, pointed at fakes."""
+    import _runtime
+
+    install_runtime(monkeypatch, FakePipeline(), FakeStore(), request)
+    return _runtime
+
+
 def _tc(name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "content": "",
