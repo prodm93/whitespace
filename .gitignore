@@ -11,6 +11,11 @@ venv/
 .ruff_cache/
 .pytest_cache/
 
+# Test coverage
+.coverage
+coverage.json
+protected.json
+
 # Environment
 .env
 .env.local
