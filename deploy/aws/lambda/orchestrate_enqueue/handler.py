@@ -21,7 +21,7 @@ import uuid
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 JOBS_TABLE = os.environ.get("JOBS_TABLE", "")
 ORCHESTRATE_QUEUE_URL = os.environ.get("ORCHESTRATE_QUEUE_URL", "")
 USAGE_TABLE = os.environ.get("USAGE_TABLE", "")
@@ -50,6 +50,12 @@ def handler(event: dict, context: object) -> dict:
     intent = body.get("intent", "")
     if not intent:
         return _response(400, {"error": "intent is required"})
+
+    from _paths import owned_keys
+
+    for field in ("profile_paths", "doc_paths"):
+        if not owned_keys(body.get(field, []), user_id):
+            return _response(400, {"error": "Invalid upload path"})
 
     job_id = uuid.uuid4().hex
 

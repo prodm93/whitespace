@@ -30,6 +30,7 @@ _txn = _load("_txn", _ENQUEUE_DIR / "_txn.py")
 _reservation = _load("_reservation", _ENQUEUE_DIR / "_reservation.py")
 _reclaim = _load("_reclaim", _ENQUEUE_DIR / "_reclaim.py")
 _reset = _load("_reset", _ENQUEUE_DIR / "_reset.py")
+_paths = _load("_paths", _ENQUEUE_DIR / "_paths.py")
 enqueue_handler = _load("enqueue_handler", _ENQUEUE_DIR / "handler.py")
 
 
