@@ -11,7 +11,7 @@ import uuid
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 UPLOADS_BUCKET = os.environ.get("UPLOADS_BUCKET", "")
 USAGE_TABLE = os.environ.get("USAGE_TABLE", "")
 RESERVATIONS_TABLE = os.environ.get("RESERVATIONS_TABLE", "")
@@ -38,7 +38,7 @@ def handler(event: dict, context: object) -> dict:
     except (json.JSONDecodeError, TypeError):
         return _response(400, {"error": "Invalid JSON body"})
 
-    filename = body.get("filename", "upload")
+    filename = _clean_filename(body.get("filename", "upload"))
     file_size = int(body.get("file_size", 0))
 
     limits = _TIER_LIMITS.get(tier, _TIER_LIMITS[_DEFAULT_TIER])
@@ -66,6 +66,14 @@ def handler(event: dict, context: object) -> dict:
 
     logger.info("Presigned POST issued for user=%s key=%s", user_id, key)
     return _response(200, {"s3_key": key, "presigned_post": presigned})
+
+
+def _clean_filename(name: object) -> str:
+    """Keep only the part after the last ``/`` or ``\\``; an unusable name becomes ``upload``."""
+    if not isinstance(name, str):
+        return "upload"
+    last = name.replace("\\", "/").rsplit("/", 1)[-1]
+    return "upload" if last in ("", ".", "..") else last
 
 
 def _reclaim_expired(dynamodb, user_id: str) -> None:
