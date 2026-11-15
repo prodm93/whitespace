@@ -12,6 +12,7 @@ from typing import Self
 
 from neo4j import AsyncDriver, AsyncGraphDatabase
 
+from whitespace.closing import close_all
 from whitespace.config import Config
 
 logger = logging.getLogger(__name__)
@@ -37,15 +38,16 @@ class Neo4jClient:
         await self._driver.verify_connectivity()
 
     async def close(self) -> None:
-        """Close the driver. Errors are logged, never re-raised."""
+        """Close the driver within the close time limit.
+
+        The handle is cleared first. An error is logged, never raised; an interruption
+        is raised.
+        """
         if self._driver is None:
             return
-        try:
-            await self._driver.close()
-        except Exception:
-            logger.exception("Neo4jClient: error closing driver")
-        finally:
-            self._driver = None
+        driver = self._driver
+        self._driver = None
+        await close_all([("Neo4j driver", driver.close)])
 
     @property
     def driver(self) -> AsyncDriver:

@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+from whitespace.closing import close_all
 from whitespace.graph.graphiti_client import GraphitiClient
 from whitespace.graph.neo4j_client import Neo4jClient
 from whitespace.models.providers import ProviderFactory
@@ -32,9 +33,14 @@ class SharedClients:
         await self.graphiti.initialise()
 
     async def close(self) -> None:
-        """Close Graphiti, then Neo4j."""
-        await self.graphiti.close()
-        await self.neo4j.close()
+        """Close Graphiti, then Neo4j.
+
+        Each close limits itself; an interruption of one does not skip the other.
+        """
+        await close_all(
+            [("Graphiti client", self.graphiti.close), ("Neo4j client", self.neo4j.close)],
+            seconds=None,
+        )
 
     async def check(self) -> None:
         """Ask both drivers for an answer; raise the driver's error when either fails.
