@@ -14,6 +14,7 @@ module "monitoring" {
 
   name_prefix               = local.name_prefix
   common_tags               = local.common_tags
+  aws_region                = var.aws_region
   budget_limit_usd          = var.budget_limit_usd
   budget_notification_email = var.budget_notification_email
   sqs_queue_names = [

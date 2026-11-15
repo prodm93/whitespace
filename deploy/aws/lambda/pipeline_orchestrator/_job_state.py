@@ -9,7 +9,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
+_AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 _JOBS_TABLE = os.environ.get("JOBS_TABLE", "")
 _RESULTS_BUCKET = os.environ.get("RESULTS_BUCKET", "")
 

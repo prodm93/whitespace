@@ -8,7 +8,7 @@ from typing import Literal
 
 logger = logging.getLogger(__name__)
 
-_AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
+_AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 _JOBS_TABLE = os.environ.get("JOBS_TABLE", "")
 
 _CLAIM_TTL_SECONDS = 25 * 3600

@@ -19,7 +19,7 @@ from urllib.parse import unquote_plus
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 RESERVATIONS_TABLE = os.environ.get("RESERVATIONS_TABLE", "")
 USAGE_TABLE = os.environ.get("USAGE_TABLE", "")
 UPLOADS_BUCKET = os.environ.get("UPLOADS_BUCKET", "")

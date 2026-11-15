@@ -15,7 +15,7 @@ resource "aws_sns_topic" "alarms" {
   name = "${var.name_prefix}-alarms"
   # AWS-managed SNS key: free to store, API calls covered by 20k/month KMS free tier
   kms_master_key_id = "alias/aws/sns"
-  tags = var.common_tags
+  tags              = var.common_tags
 }
 
 resource "aws_sns_topic_subscription" "email" {
@@ -177,7 +177,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Model Call Latency"
           metrics = [["whitespace", "model_call_latency", { stat = "Average" }]]
           period  = 300
-          region  = "sa-east-1"
+          region  = var.aws_region
         }
       },
       {
@@ -193,7 +193,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             ["whitespace", "model_call_success", { stat = "Sum" }],
           ]
           period = 300
-          region = "sa-east-1"
+          region = var.aws_region
         }
       },
       {
@@ -206,7 +206,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           title   = "Estimated Cost (USD)"
           metrics = [["whitespace", "estimated_cost_usd", { stat = "Sum" }]]
           period  = 3600
-          region  = "sa-east-1"
+          region  = var.aws_region
         }
       },
       {
@@ -222,7 +222,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", qn]
           ]
           period = 60
-          region = "sa-east-1"
+          region = var.aws_region
         }
       },
       {
@@ -237,7 +237,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             ["AWS/Lambda", "Invocations", "FunctionName", "${var.name_prefix}-pipeline-orchestrator"],
           ]
           period = 60
-          region = "sa-east-1"
+          region = var.aws_region
         }
       },
     ]

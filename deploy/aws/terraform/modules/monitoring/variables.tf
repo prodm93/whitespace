@@ -3,6 +3,11 @@ variable "name_prefix" {
   type        = string
 }
 
+variable "aws_region" {
+  description = "AWS region of the metrics the dashboard shows"
+  type        = string
+}
+
 variable "common_tags" {
   description = "Tags applied to all resources"
   type        = map(string)

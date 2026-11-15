@@ -13,7 +13,7 @@ import os
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 PIPELINE_FUNCTION = os.environ.get("PIPELINE_FUNCTION", "")
 
 

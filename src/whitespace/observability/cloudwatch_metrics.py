@@ -12,7 +12,7 @@ class CloudWatchMetricsEmitter(MetricsEmitter):
     def __init__(
         self,
         namespace: str = "whitespace",
-        region: str = "sa-east-1",
+        region: str = "us-east-1",
     ) -> None:
         import boto3
 

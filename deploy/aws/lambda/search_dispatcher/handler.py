@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 RESULTS_BUCKET = os.environ.get("RESULTS_BUCKET", "")
-AWS_REGION = os.environ.get("AWS_REGION", "sa-east-1")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 _s3_client = None
 
