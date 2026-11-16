@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import _teardown
 from _connection import CONNECTION_ERRORS, build_checked, discard, with_attempts
+from _session_store import _build_session_store
 from _teardown import cancel_tasks, close_loop
 
 from whitespace.config import Config
@@ -115,17 +116,6 @@ def _retire(loop: asyncio.AbstractEventLoop) -> None:
     _, shared = _take_kept()
     logger.warning("Work left by a call did not end; the loop and the kept clients are retired")
     close_loop(loop, shared)
-
-
-def _build_session_store(config: Config, owner: str) -> SessionStore:
-    if config.sessions_table:
-        from whitespace.store.dynamo_store import DynamoSessionStore
-
-        return DynamoSessionStore(config.sessions_table, config.aws_region, owner=owner)
-    logger.warning("SESSIONS_TABLE not set; session persistence disabled")
-    from whitespace.store.noop_store import NoopSessionStore
-
-    return NoopSessionStore()
 
 
 async def _connect_once() -> SharedClients:
