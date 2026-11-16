@@ -58,6 +58,11 @@ resource "aws_iam_role_policy" "pipeline_permissions" {
         Action   = ["cloudwatch:PutMetricData"]
         Resource = "*"
       },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = var.pipeline_secret_arn
+      },
     ]
   })
 }
@@ -123,12 +128,13 @@ resource "aws_lambda_function" "pipeline_orchestrator" {
 
   environment {
     variables = {
-      MODE           = "saas"
-      RESULTS_BUCKET = var.results_bucket_name
-      UPLOADS_BUCKET = var.uploads_bucket_name
-      JOBS_TABLE     = var.jobs_table_name
-      SESSIONS_TABLE = var.sessions_table_name
-      USAGE_TABLE    = var.usage_table_name
+      MODE                = "saas"
+      RESULTS_BUCKET      = var.results_bucket_name
+      UPLOADS_BUCKET      = var.uploads_bucket_name
+      JOBS_TABLE          = var.jobs_table_name
+      SESSIONS_TABLE      = var.sessions_table_name
+      USAGE_TABLE         = var.usage_table_name
+      PIPELINE_SECRET_ARN = var.pipeline_secret_arn
     }
   }
 

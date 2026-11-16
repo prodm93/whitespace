@@ -129,3 +129,8 @@ variable "aws_region" {
   description = "AWS region"
   type        = string
 }
+
+variable "pipeline_secret_arn" {
+  description = "ARN of the Secrets Manager secret that the pipeline function reads at run time"
+  type        = string
+}

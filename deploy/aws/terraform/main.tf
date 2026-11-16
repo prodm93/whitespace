@@ -87,6 +87,7 @@ module "lambda" {
   orchestrate_queue_url   = module.queue.orchestrate_queue_url
   log_group_name          = module.monitoring.lambda_log_group_name
   aws_region              = var.aws_region
+  pipeline_secret_arn     = module.secrets.pipeline_secret_arn
 }
 
 # ---------- API Gateway ----------
