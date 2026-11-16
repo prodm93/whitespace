@@ -45,15 +45,9 @@ module "queue" {
 module "secrets" {
   source = "./modules/secrets"
 
-  name_prefix          = local.name_prefix
-  common_tags          = local.common_tags
-  clerk_secret_key     = var.clerk_secret_key
-  stripe_secret_key    = var.stripe_secret_key
-  clerk_webhook_secret = var.clerk_webhook_secret
-  openrouter_api_key   = var.openrouter_api_key
-  exa_api_key          = var.exa_api_key
-  firecrawl_api_key    = var.firecrawl_api_key
-  langsmith_api_key    = var.langsmith_api_key
+  name_prefix             = local.name_prefix
+  common_tags             = local.common_tags
+  recovery_window_in_days = var.environment == "prod" ? 30 : 0
 }
 
 # ---------- Storage ----------

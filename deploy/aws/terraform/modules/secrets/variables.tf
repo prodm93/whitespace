@@ -8,37 +8,12 @@ variable "common_tags" {
   type        = map(string)
 }
 
-variable "clerk_secret_key" {
-  type      = string
-  sensitive = true
-}
+variable "recovery_window_in_days" {
+  description = "Days a deleted secret can still be restored; 0 deletes it at once"
+  type        = number
 
-variable "stripe_secret_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "clerk_webhook_secret" {
-  type      = string
-  sensitive = true
-}
-
-variable "openrouter_api_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "exa_api_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "firecrawl_api_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "langsmith_api_key" {
-  type      = string
-  sensitive = true
+  validation {
+    condition     = var.recovery_window_in_days == 0 || (var.recovery_window_in_days >= 7 && var.recovery_window_in_days <= 30)
+    error_message = "recovery_window_in_days must be 0, or from 7 to 30."
+  }
 }

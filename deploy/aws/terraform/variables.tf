@@ -55,57 +55,6 @@ variable "budget_notification_email" {
   default     = ""
 }
 
-# ---------- Secrets ----------
-
-variable "clerk_secret_key" {
-  description = "Clerk secret key"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "stripe_secret_key" {
-  description = "Stripe secret key"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "clerk_webhook_secret" {
-  description = "Clerk webhook signing secret"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "openrouter_api_key" {
-  description = "OpenRouter API key (server-side for SaaS fallback)"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "exa_api_key" {
-  description = "Exa search API key"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "firecrawl_api_key" {
-  description = "Firecrawl API key"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "langsmith_api_key" {
-  description = "LangSmith API key"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
 # ---------- Pipeline ----------
 
 variable "pipeline_image_uri" {

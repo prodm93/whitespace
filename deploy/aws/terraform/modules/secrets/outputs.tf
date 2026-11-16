@@ -1,9 +1,4 @@
-output "parameter_arns" {
-  description = "ARNs of all SSM parameters"
-  value       = [for p in aws_ssm_parameter.secret : p.arn]
-}
-
-output "parameter_names" {
-  description = "Map of logical key to SSM parameter name"
-  value       = { for k, p in aws_ssm_parameter.secret : k => p.name }
+output "pipeline_secret_arn" {
+  description = "ARN of the pipeline function's secret"
+  value       = aws_secretsmanager_secret.pipeline.arn
 }

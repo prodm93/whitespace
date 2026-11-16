@@ -1,27 +1,10 @@
-locals {
-  parameters = {
-    clerk_secret_key     = var.clerk_secret_key
-    stripe_secret_key    = var.stripe_secret_key
-    clerk_webhook_secret = var.clerk_webhook_secret
-    openrouter_api_key   = var.openrouter_api_key
-    exa_api_key          = var.exa_api_key
-    firecrawl_api_key    = var.firecrawl_api_key
-    langsmith_api_key    = var.langsmith_api_key
-  }
-}
+resource "aws_secretsmanager_secret" "pipeline" {
+  name                    = "${var.name_prefix}-pipeline"
+  recovery_window_in_days = var.recovery_window_in_days
 
-resource "aws_ssm_parameter" "secret" {
-  for_each = local.parameters
-
-  name  = "/${var.name_prefix}/${replace(each.key, "_", "-")}"
-  type  = "SecureString"
-  value = each.value != "" ? each.value : "placeholder"
+  description = "Secrets of the pipeline function, as one JSON object. Required keys: neo4j_uri, neo4j_username, neo4j_password. Optional keys: exa_api_key, langsmith_api_key. Terraform creates the secret empty; put the value in with: aws secretsmanager put-secret-value --secret-id ${var.name_prefix}-pipeline --secret-string file://<a JSON file outside the repo>"
 
   tags = merge(var.common_tags, {
-    Name = "${var.name_prefix}-${each.key}"
+    Name = "${var.name_prefix}-pipeline"
   })
-
-  lifecycle {
-    ignore_changes = [value]
-  }
 }
