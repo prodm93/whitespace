@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from _loop_helpers import tick
 from _runtime_helpers import FakeShared, TaskShared, record_waits, use_factory
+from _settings import SecretsError
 from neo4j.exceptions import AuthError, ServiceUnavailable, SessionExpired
 
 
@@ -87,9 +88,10 @@ def test_an_interrupted_close_of_a_failed_build_keeps_the_build_error(
         ),
     )
 
-    with pytest.raises(AuthError):
+    with pytest.raises(SecretsError) as raised:
         runtime.run(runtime.open_run("user_a"))
 
+    assert isinstance(raised.value.__cause__, AuthError)
     assert "close" in factory.built[0].calls
 
 

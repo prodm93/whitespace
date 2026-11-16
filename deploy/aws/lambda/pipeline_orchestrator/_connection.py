@@ -7,8 +7,9 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
+from _settings import SecretsError
 from _teardown import close_quietly
-from neo4j.exceptions import ServiceUnavailable, SessionExpired
+from neo4j.exceptions import AuthError, ServiceUnavailable, SessionExpired
 
 from whitespace.tools.retry import transient_retry
 
@@ -64,7 +65,9 @@ async def with_attempts(connect_once: Callable[[], Awaitable[SharedClients]]) ->
     """Try ``connect_once`` four times, about one minute in all.
 
     Only connection errors are retried. When every attempt fails, the run fails with
-    ``GraphUnavailableError``; any other error comes out unchanged.
+    ``GraphUnavailableError``. A graph that refuses the stored login fails the run at once
+    with ``SecretsError``; the log names the error's class and code, never the server's
+    message. Any other error comes out unchanged.
     """
     policy = transient_retry(
         attempts=CONNECT_ATTEMPTS,
@@ -77,3 +80,8 @@ async def with_attempts(connect_once: Callable[[], Awaitable[SharedClients]]) ->
     except CONNECTION_ERRORS as error:
         logger.exception("The knowledge graph did not answer in %d attempts", CONNECT_ATTEMPTS)
         raise GraphUnavailableError(UNREACHABLE) from error
+    except AuthError as error:
+        logger.error(
+            "The graph refused the stored Neo4j login: %s %s", type(error).__name__, error.code
+        )
+        raise SecretsError() from error

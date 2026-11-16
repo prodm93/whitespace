@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from _runtime_helpers import UNREACHABLE, FakeShared, record_waits, use_factory, use_recorder
+from _settings import SecretsError
 from neo4j.exceptions import AuthError, ServiceUnavailable, SessionExpired
 
 from whitespace.tenant import TenantIdError
@@ -163,9 +164,10 @@ def test_an_auth_error_is_not_retried(monkeypatch: Any, runtime: Any) -> None:
         lambda _n: FakeShared(initialise_error=AuthError("wrong password")),
     )
 
-    with pytest.raises(AuthError):
+    with pytest.raises(SecretsError) as raised:
         runtime.run(runtime.open_run("user_a"))
 
+    assert isinstance(raised.value.__cause__, AuthError)
     assert len(factory.built) == 1
 
 
