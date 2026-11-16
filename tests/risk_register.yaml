@@ -44,7 +44,13 @@
 - name: job-start-owner-only
   tier: critical
   protects: A job starts for a payload whose user does not own the jobs row.
+- name: secret-values-not-logged
+  tier: critical
+  protects: A value of the pipeline secret appears in a log line, in the error text a user sees, or in the chain of an error.
 
+- name: saas-secrets-loaded
+  tier: high
+  protects: A SaaS run starts without the values of the pipeline secret, keeps old values after the secret changed, or stops on a failed re-read while good values are held.
 - name: usage-cap-enforced
   tier: high
   protects: A user at the limit of their tier, or with an unknown tier, gets a job queued.

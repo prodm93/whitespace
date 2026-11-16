@@ -30,6 +30,7 @@ COPY deploy/aws/lambda/pipeline_orchestrator/handler.py \
      deploy/aws/lambda/pipeline_orchestrator/_failure.py \
      deploy/aws/lambda/pipeline_orchestrator/_runtime.py \
      deploy/aws/lambda/pipeline_orchestrator/_session_store.py \
+     deploy/aws/lambda/pipeline_orchestrator/_settings.py \
      deploy/aws/lambda/pipeline_orchestrator/_teardown.py \
      deploy/aws/lambda/pipeline_orchestrator/_uploads.py \
      deploy/aws/lambda/pipeline_orchestrator/_loop.py ./

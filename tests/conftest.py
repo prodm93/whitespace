@@ -1,7 +1,8 @@
 """Shared fixtures for upload Lambda handler tests, and the guards that keep every test
 away from real services.
 
-It also holds the ``runtime`` fixture of the SaaS pipeline function's tests, and the hooks
+It also holds the ``runtime`` and ``use_client`` fixtures of the SaaS pipeline function's
+tests (its runtime, and its secrets loader with a stand-in client), and the hooks
 that count, for each risk register item, the passed tests marked ``protects(<item>)``; the
 counts are written to ``protected.json`` in the root directory at the end of the session.
 
@@ -89,6 +90,14 @@ def runtime(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> 
     from _saas_helpers import fake_runtime
 
     return fake_runtime(monkeypatch, request)
+
+
+@pytest.fixture()
+def use_client(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """The SaaS secrets loader with fresh state; call the result with a stand-in client."""
+    from _settings_helpers import reset_loader
+
+    return reset_loader(monkeypatch)
 
 
 _ROOT = Path(__file__).resolve().parent.parent
