@@ -88,6 +88,8 @@ module "lambda" {
   log_group_name          = module.monitoring.lambda_log_group_name
   aws_region              = var.aws_region
   pipeline_secret_arn     = module.secrets.pipeline_secret_arn
+  clerk_jwks_url          = var.clerk_jwks_url
+  clerk_issuer            = var.clerk_issuer
 }
 
 # ---------- API Gateway ----------

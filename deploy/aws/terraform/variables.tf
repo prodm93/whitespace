@@ -55,6 +55,33 @@ variable "budget_notification_email" {
   default     = ""
 }
 
+# ---------- Sign-in (Clerk) ----------
+
+variable "clerk_jwks_url" {
+  description = "Clerk JWKS URL: the Frontend API URL followed by /.well-known/jwks.json. Found in the Clerk dashboard, API keys page."
+  type        = string
+
+  validation {
+    condition     = startswith(var.clerk_jwks_url, "https://")
+    error_message = "clerk_jwks_url must start with https://."
+  }
+}
+
+variable "clerk_issuer" {
+  description = "Clerk issuer: the Frontend API URL, no trailing slash. Found in the Clerk dashboard, API keys page."
+  type        = string
+
+  validation {
+    condition     = startswith(var.clerk_issuer, "https://")
+    error_message = "clerk_issuer must start with https://."
+  }
+
+  validation {
+    condition     = !endswith(var.clerk_issuer, "/")
+    error_message = "clerk_issuer must not end with a slash; the authoriser compares the issuer exactly."
+  }
+}
+
 # ---------- Pipeline ----------
 
 variable "pipeline_image_uri" {

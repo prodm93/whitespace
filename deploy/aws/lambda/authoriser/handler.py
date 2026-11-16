@@ -1,4 +1,4 @@
-"""API Gateway Lambda authoriser — validates Clerk JWTs."""
+"""API Gateway Lambda authoriser; validates Clerk JWTs."""
 
 import logging
 import os
@@ -27,8 +27,13 @@ def _get_jwks_client() -> PyJWKClient:
 def handler(event: dict, context: object) -> dict:
     """API Gateway HTTP API payload format 2.0 authoriser.
 
-    Returns simple response: isAuthorized bool + context with user_id and tier.
+    Returns simple response: isAuthorized bool + context with user_id and tier. With no
+    issuer configured, every request is refused.
     """
+    if not CLERK_ISSUER:
+        logger.error("CLERK_ISSUER not configured; the request is refused")
+        return {"isAuthorized": False}
+
     headers = event.get("headers", {})
     auth_header = headers.get("authorization", "")
 
@@ -42,11 +47,7 @@ def handler(event: dict, context: object) -> dict:
         jwks_client = _get_jwks_client()
         signing_key = jwks_client.get_signing_key_from_jwt(token)
 
-        decode_opts: dict = {"algorithms": ["RS256"]}
-        if CLERK_ISSUER:
-            decode_opts["issuer"] = CLERK_ISSUER
-
-        claims = jwt.decode(token, signing_key.key, **decode_opts)
+        claims = jwt.decode(token, signing_key.key, algorithms=["RS256"], issuer=CLERK_ISSUER)
     except jwt.ExpiredSignatureError:
         logger.info("Token expired")
         return {"isAuthorized": False}

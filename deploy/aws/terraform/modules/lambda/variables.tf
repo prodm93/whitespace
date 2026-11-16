@@ -116,13 +116,11 @@ variable "log_group_name" {
 variable "clerk_jwks_url" {
   description = "Clerk JWKS URL for the authoriser"
   type        = string
-  default     = ""
 }
 
 variable "clerk_issuer" {
   description = "Clerk issuer URL for the authoriser"
   type        = string
-  default     = ""
 }
 
 variable "aws_region" {

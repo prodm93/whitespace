@@ -31,11 +31,12 @@ def authoriser(monkeypatch: Any) -> Any:
         get_signing_key_from_jwt=lambda _token: SimpleNamespace(key=_SIGNING_KEY.public_key())
     )
     monkeypatch.setattr(module, "_get_jwks_client", lambda: keys)
+    monkeypatch.setattr(module, "CLERK_ISSUER", _ISSUER)
     return module
 
 
 def _token(key: rsa.RSAPrivateKey = _SIGNING_KEY, **claims: Any) -> str:
-    payload = {"sub": "user_a", "exp": int(time.time()) + 300, **claims}
+    payload = {"sub": "user_a", "exp": int(time.time()) + 300, "iss": _ISSUER, **claims}
     return jwt.encode({k: v for k, v in payload.items() if v is not None}, key, algorithm="RS256")
 
 
@@ -60,10 +61,7 @@ def test_a_request_without_a_valid_token_is_refused(authoriser: Any, header: str
 
 
 @pytest.mark.protects("sign-in-token-checked")
-def test_a_token_of_another_issuer_is_refused_when_the_issuer_is_set(
-    authoriser: Any, monkeypatch: Any
-) -> None:
-    monkeypatch.setattr(authoriser, "CLERK_ISSUER", _ISSUER)
+def test_a_token_of_another_issuer_is_refused_when_the_issuer_is_set(authoriser: Any) -> None:
     token = _token(iss="https://someone-else.example.test")
 
     assert authoriser.handler(_event(f"Bearer {token}"), None) == {"isAuthorized": False}
@@ -80,8 +78,7 @@ def test_a_failing_key_client_refuses_the_request(authoriser: Any, monkeypatch: 
 
 
 @pytest.mark.protects("sign-in-token-checked")
-def test_a_valid_token_passes_on_its_user_and_tier(authoriser: Any, monkeypatch: Any) -> None:
-    monkeypatch.setattr(authoriser, "CLERK_ISSUER", _ISSUER)
+def test_a_valid_token_passes_on_its_user_and_tier(authoriser: Any) -> None:
     token = _token(iss=_ISSUER, metadata={"tier": "pro"})
 
     assert authoriser.handler(_event(f"Bearer {token}"), None) == {
@@ -95,3 +92,18 @@ def test_a_token_with_no_metadata_gets_the_free_tier(authoriser: Any) -> None:
     result = authoriser.handler(_event(f"Bearer {_token()}"), None)
 
     assert result["context"] == {"user_id": "user_a", "tier": "free"}
+
+
+@pytest.mark.protects("sign-in-token-checked")
+def test_a_token_with_no_issuer_is_refused(authoriser: Any) -> None:
+    assert authoriser.handler(_event(f"Bearer {_token(iss=None)}"), None) == {"isAuthorized": False}
+
+
+@pytest.mark.protects("sign-in-token-checked")
+def test_every_request_is_refused_when_no_issuer_is_configured(
+    authoriser: Any, monkeypatch: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(authoriser, "CLERK_ISSUER", "")
+
+    assert authoriser.handler(_event(f"Bearer {_token()}"), None) == {"isAuthorized": False}
+    assert [r.levelname for r in caplog.records] == ["ERROR"]
