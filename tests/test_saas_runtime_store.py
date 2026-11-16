@@ -23,11 +23,11 @@ def runtime_with_sessions_table(monkeypatch: Any, request: Any) -> Any:
     """The runtime with fake clients, the real store builder and a sessions table set."""
     install_runtime(monkeypatch, FakePipeline(), FakeStore(), request)
     monkeypatch.setattr(_runtime, "_build_session_store", _REAL_BUILD_SESSION_STORE)
-    monkeypatch.setattr(
-        _runtime,
-        "Config",
-        lambda: Config(_env_file=None, mode="saas", sessions_table="sessions"),
-    )
+
+    async def _load_config() -> Config:
+        return Config(_env_file=None, mode="saas", sessions_table="sessions")
+
+    monkeypatch.setattr(_runtime, "load_config", _load_config)
     return _runtime
 
 

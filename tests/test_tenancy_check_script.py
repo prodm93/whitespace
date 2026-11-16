@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import types
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ from typing import Any
 import pytest
 from _loop_helpers import Stubborn, tick
 from _module_loading import load_module
-from _runtime_helpers import FakeShared, record_waits, use_factory
+from _runtime_helpers import FakeShared, record_waits, use_factory, use_recorder
 from neo4j.exceptions import ServiceUnavailable
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "tenancy_check.py"
@@ -126,3 +127,24 @@ def test_a_retirement_while_the_run_opens_leaves_the_banner_and_reads_working(
     out = capsys.readouterr().out
     assert f"id(_shared)={id(factory.built[2])}; namespace=user_a" in out
     assert "answer MOONLATHE" in out
+
+
+def test_the_lifecycle_runtime_opens_a_run_from_the_local_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PIPELINE_SECRET_ARN", raising=False)
+    monkeypatch.setenv("NEO4J_PASSWORD", "local-password")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.delitem(sys.modules, "_runtime", raising=False)
+    runtime = _script()._load_runtime()
+    use_factory(monkeypatch, runtime)
+    recorder = use_recorder(monkeypatch, runtime)
+
+    try:
+        runtime.run(runtime.open_run("user_a"))
+    finally:
+        monkeypatch.setenv("PIPELINE_REUSE", "invocation")
+        runtime.finish_run()
+
+    assert recorder.calls[0][1].neo4j_password == "local-password"
+    assert recorder.calls[0][1].graphiti_namespace == "user_a"

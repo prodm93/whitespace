@@ -11,7 +11,8 @@ Run on a machine whose ``.env`` holds the SaaS Neo4j credentials:
   words through the run pipeline; first with the kept clients, then with
   ``PIPELINE_REUSE=invocation``. After each open it prints the identity of the kept clients
   and the namespace of the run pipeline. For this mode set ``MODE=byok`` and leave
-  ``SESSIONS_TABLE`` unset, so that no AWS credentials are needed.
+  ``SESSIONS_TABLE`` unset, so that no AWS credentials are needed. This mode takes its
+  credentials from the local ``.env``, not from the stored secret of the pipeline function.
 
 Each read in lifecycle mode makes one planner model call and embedding calls.
 """
@@ -68,6 +69,11 @@ def _load_runtime() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     sys.modules["_runtime"] = module
     spec.loader.exec_module(module)
+
+    async def load_local_config() -> Config:
+        return Config()
+
+    module.load_config = load_local_config
     return module
 
 

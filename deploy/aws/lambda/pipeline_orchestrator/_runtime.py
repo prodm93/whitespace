@@ -9,6 +9,7 @@ runs one invocation at a time, so module state is safe.
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import os
 from collections.abc import Coroutine
@@ -17,6 +18,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 import _teardown
 from _connection import CONNECTION_ERRORS, build_checked, discard, with_attempts
 from _session_store import _build_session_store
+from _settings import load_config
 from _teardown import cancel_tasks, close_loop
 
 from whitespace.config import Config
@@ -118,8 +120,8 @@ def _retire(loop: asyncio.AbstractEventLoop) -> None:
     close_loop(loop, shared)
 
 
-async def _connect_once() -> SharedClients:
-    """Return kept clients whose two drivers both answered in this attempt.
+async def _connect_once(config: Config) -> SharedClients:
+    """Return kept clients built from ``config`` whose two drivers both answered.
 
     A new set is kept with the tasks it started while it was built; those are spared at
     the end of each call. A kept set that fails its check is dropped first, then closed,
@@ -127,7 +129,7 @@ async def _connect_once() -> SharedClients:
     """
     global _shared, _kept_tasks
     if _shared is None:
-        _shared, _kept_tasks = await build_checked(lambda: build_shared(Config()))
+        _shared, _kept_tasks = await build_checked(lambda: build_shared(config))
         return _shared
     try:
         await _shared.check()
@@ -144,14 +146,16 @@ async def _connect_once() -> SharedClients:
 async def open_run(user_id: str) -> None:
     """Build the run pipeline and the store of one tenant on the kept clients.
 
-    The graph connection is tried four times, about one minute in all, before the run
-    fails with ``GraphUnavailableError``. Only connection errors are retried.
+    The configuration, secrets included, comes from ``load_config`` at the start of every
+    run. The graph connection is made by ``with_attempts``: four tries, then
+    ``GraphUnavailableError``; a refused login fails at once with ``SecretsError``.
     """
     global _run, _store, _owner
     _clear_run()
     owner = require_tenant_id(user_id)
-    shared = await with_attempts(_connect_once)
-    config = Config().model_copy(update={"graphiti_namespace": owner})
+    loaded = await load_config()
+    shared = await with_attempts(functools.partial(_connect_once, loaded))
+    config = loaded.model_copy(update={"graphiti_namespace": owner})
     _store = _build_session_store(config, owner)
     _run = Pipeline.from_shared(shared, config, session_store=_store)
     _owner = owner

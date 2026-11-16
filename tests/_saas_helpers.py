@@ -140,7 +140,11 @@ def install_runtime(monkeypatch: Any, pipeline: Any, store: Any, request: Any) -
         _runtime, "Pipeline", types.SimpleNamespace(from_shared=lambda *_a, **_kw: pipeline)
     )
     monkeypatch.setattr(_runtime, "_build_session_store", lambda _config, _owner: store)
-    monkeypatch.setattr(_runtime, "Config", lambda: Config(_env_file=None, mode="saas"))
+
+    async def _load_config() -> Config:
+        return Config(_env_file=None, mode="saas")
+
+    monkeypatch.setattr(_runtime, "load_config", _load_config)
     for name in ("_shared", "_run", "_store", "_owner", "_loop"):
         monkeypatch.setattr(_runtime, name, None)
     monkeypatch.setattr(_runtime, "_reopen_for", None)
