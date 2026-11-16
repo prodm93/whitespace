@@ -36,6 +36,7 @@ _T = TypeVar("_T")
 
 _loop: asyncio.AbstractEventLoop | None = None
 _shared: SharedClients | None = None
+_shared_config: Config | None = None
 _run: Pipeline | None = None
 _store: SessionStore | None = None
 _owner: str | None = None
@@ -101,10 +102,11 @@ def _clear_run() -> None:
 
 def _take_kept() -> tuple[asyncio.AbstractEventLoop | None, SharedClients | None]:
     """Hand over the kept loop and clients, and forget them and their background tasks."""
-    global _loop, _shared, _kept_tasks
+    global _loop, _shared, _shared_config, _kept_tasks
     loop, shared = _loop, _shared
     _loop = None
     _shared = None
+    _shared_config = None
     _kept_tasks = set()
     return loop, shared
 
@@ -123,13 +125,21 @@ def _retire(loop: asyncio.AbstractEventLoop) -> None:
 async def _connect_once(config: Config) -> SharedClients:
     """Return kept clients built from ``config`` whose two drivers both answered.
 
-    A new set is kept with the tasks it started while it was built; those are spared at
-    the end of each call. A kept set that fails its check is dropped first, then closed,
-    and its error is raised, so the next attempt builds a new one.
+    A kept set built from other values (the secrets changed) is closed and built again. A
+    new set is kept with the tasks it started while it was built; those are spared at the
+    end of each call. A kept set that fails its check is dropped first, then closed, and
+    its error is raised, so the next attempt builds a new one.
     """
-    global _shared, _kept_tasks
+    global _shared, _shared_config, _kept_tasks
+    if _shared is not None and config != _shared_config:
+        logger.warning("The secrets changed; the kept clients are built again")
+        stale = _shared
+        _shared = None
+        _kept_tasks = set()
+        await discard(stale)
     if _shared is None:
         _shared, _kept_tasks = await build_checked(lambda: build_shared(config))
+        _shared_config = config
         return _shared
     try:
         await _shared.check()

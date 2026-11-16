@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 from _loop_helpers import Stubborn, tick
-from _runtime_helpers import FakeShared, use_factory, use_recorder
-from neo4j.exceptions import AuthError
+from _runtime_helpers import FakeShared, record_waits, use_factory, use_recorder
+from neo4j.exceptions import AuthError, ServiceUnavailable
 
 from whitespace.config import Config
 
@@ -104,6 +104,46 @@ def test_the_run_reopened_after_a_retirement_uses_the_same_loader(
     assert runtime.run(owner()) == "user_a"
     assert calls == [0, 1]
     assert recorder.calls[-1][1].neo4j_password == "password-two"
+
+
+@pytest.mark.protects("saas-secrets-loaded")
+def test_a_changed_secret_rebuilds_the_kept_clients_once(
+    monkeypatch: pytest.MonkeyPatch, runtime: Any
+) -> None:
+    first, changed = _config(), _config("password-two")
+    use_loader(monkeypatch, runtime, first, first, changed, changed)
+    factory = use_factory(monkeypatch, runtime)
+    recorder = use_recorder(monkeypatch, runtime)
+
+    for _ in range(4):
+        _open(runtime)
+        runtime.finish_run()
+
+    assert len(factory.built) == 2
+    assert factory.built[0].calls[-1] == "close"
+    assert "close" not in factory.built[1].calls
+    assert [call[0] for call in recorder.calls] == [factory.built[0]] * 2 + [factory.built[1]] * 2
+
+
+def test_a_rebuild_that_cannot_connect_is_tried_again_and_leaves_no_half_built_set(
+    monkeypatch: pytest.MonkeyPatch, runtime: Any
+) -> None:
+    record_waits(monkeypatch)
+    use_loader(monkeypatch, runtime, _config(), _config("password-two"))
+    factory = use_factory(
+        monkeypatch,
+        runtime,
+        lambda n: FakeShared(initialise_error=ServiceUnavailable()) if n == 1 else FakeShared(),
+    )
+    _open(runtime)
+    runtime.finish_run()
+
+    _open(runtime)
+
+    assert len(factory.built) == 3
+    assert factory.built[0].calls[-1] == "close"
+    assert factory.built[1].calls[-1] == "close"
+    assert runtime._shared is factory.built[2]
 
 
 @pytest.mark.protects("secret-values-not-logged")
