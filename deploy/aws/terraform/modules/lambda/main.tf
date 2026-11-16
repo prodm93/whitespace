@@ -107,8 +107,9 @@ resource "aws_lambda_function" "authoriser" {
 
   environment {
     variables = {
-      CLERK_JWKS_URL = var.clerk_jwks_url
-      CLERK_ISSUER   = var.clerk_issuer
+      CLERK_JWKS_URL           = var.clerk_jwks_url
+      CLERK_ISSUER             = var.clerk_issuer
+      CLERK_AUTHORIZED_PARTIES = join(",", var.clerk_authorized_parties)
     }
   }
 

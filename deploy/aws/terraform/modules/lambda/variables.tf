@@ -123,6 +123,11 @@ variable "clerk_issuer" {
   type        = string
 }
 
+variable "clerk_authorized_parties" {
+  description = "Origins whose Clerk tokens the authoriser accepts"
+  type        = list(string)
+}
+
 variable "aws_region" {
   description = "AWS region"
   type        = string

@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 _HANDLER = Path(__file__).resolve().parents[1] / "deploy" / "aws" / "lambda" / "authoriser"
 _ISSUER = "https://clerk.example.test"
+_ORIGIN = "https://app.example.test"
 
 
 def _key() -> rsa.RSAPrivateKey:
@@ -32,6 +33,7 @@ def authoriser(monkeypatch: Any) -> Any:
     )
     monkeypatch.setattr(module, "_get_jwks_client", lambda: keys)
     monkeypatch.setattr(module, "CLERK_ISSUER", _ISSUER)
+    monkeypatch.setattr(module, "CLERK_AUTHORIZED_PARTIES", {_ORIGIN})
     return module
 
 
@@ -107,3 +109,62 @@ def test_every_request_is_refused_when_no_issuer_is_configured(
 
     assert authoriser.handler(_event(f"Bearer {_token()}"), None) == {"isAuthorized": False}
     assert [r.levelname for r in caplog.records] == ["ERROR"]
+
+
+@pytest.mark.protects("sign-in-token-checked")
+def test_a_token_from_an_allowed_origin_passes(authoriser: Any) -> None:
+    result = authoriser.handler(_event(f"Bearer {_token(azp=_ORIGIN)}"), None)
+
+    assert result["isAuthorized"] is True
+
+
+@pytest.mark.protects("sign-in-token-checked")
+def test_a_token_from_another_origin_is_refused_and_the_origin_is_logged(
+    authoriser: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    token = _token(azp="https://elsewhere.example.test")
+
+    assert authoriser.handler(_event(f"Bearer {token}"), None) == {"isAuthorized": False}
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1 and "https://elsewhere.example.test" in warnings[0]
+
+
+@pytest.mark.protects("sign-in-token-checked")
+@pytest.mark.parametrize(
+    "origin", [None, [_ORIGIN], {"origin": _ORIGIN}], ids=["null", "a list", "an object"]
+)
+def test_a_token_whose_origin_claim_is_not_a_text_is_refused(authoriser: Any, origin: Any) -> None:
+    payload = {"sub": "user_a", "exp": int(time.time()) + 300, "iss": _ISSUER, "azp": origin}
+    token = jwt.encode(payload, _SIGNING_KEY, algorithm="RS256")
+
+    assert authoriser.handler(_event(f"Bearer {token}"), None) == {"isAuthorized": False}
+
+
+@pytest.mark.protects("sign-in-token-checked")
+def test_a_token_with_no_origin_claim_passes(authoriser: Any) -> None:
+    assert authoriser.handler(_event(f"Bearer {_token()}"), None)["isAuthorized"] is True
+
+
+@pytest.mark.protects("sign-in-token-checked")
+def test_every_request_is_refused_when_no_origin_is_allowed(
+    authoriser: Any, monkeypatch: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(authoriser, "CLERK_AUTHORIZED_PARTIES", set())
+
+    assert authoriser.handler(_event(f"Bearer {_token(azp=_ORIGIN)}"), None) == {
+        "isAuthorized": False
+    }
+    assert [r.levelname for r in caplog.records] == ["ERROR"]
+
+
+@pytest.mark.protects("sign-in-token-checked")
+def test_the_allowed_origins_are_read_without_blanks_or_trailing_slashes(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setenv(
+        "CLERK_AUTHORIZED_PARTIES", " https://app.example.test/ ,http://localhost:3000,, / "
+    )
+
+    allowed = load_module("authoriser_handler", _HANDLER / "handler.py").CLERK_AUTHORIZED_PARTIES
+
+    assert allowed == {"https://app.example.test", "http://localhost:3000"}

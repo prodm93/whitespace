@@ -64,32 +64,33 @@ module "storage" {
 module "lambda" {
   source = "./modules/lambda"
 
-  name_prefix             = local.name_prefix
-  common_tags             = local.common_tags
-  lambda_build_dir        = "${path.module}/../lambda_build"
-  pipeline_image_uri      = var.pipeline_image_uri
-  results_bucket_name     = module.storage.results_bucket_name
-  results_bucket_arn      = module.storage.results_bucket_arn
-  checkpoints_bucket_name = module.storage.checkpoints_bucket_name
-  checkpoints_bucket_arn  = module.storage.checkpoints_bucket_arn
-  uploads_bucket_name     = module.storage.upload_bucket_name
-  uploads_bucket_arn      = module.storage.upload_bucket_arn
-  checkpoints_table_name  = module.storage.checkpoints_table_name
-  jobs_table_name         = module.storage.jobs_table_name
-  jobs_table_arn          = module.storage.jobs_table_arn
-  sessions_table_name     = module.storage.sessions_table_name
-  sessions_table_arn      = module.storage.sessions_table_arn
-  usage_table_name        = module.storage.usage_table_name
-  usage_table_arn         = module.storage.usage_table_arn
-  reservations_table_name = module.storage.reservations_table_name
-  reservations_table_arn  = module.storage.reservations_table_arn
-  orchestrate_queue_arn   = module.queue.orchestrate_queue_arn
-  orchestrate_queue_url   = module.queue.orchestrate_queue_url
-  log_group_name          = module.monitoring.lambda_log_group_name
-  aws_region              = var.aws_region
-  pipeline_secret_arn     = module.secrets.pipeline_secret_arn
-  clerk_jwks_url          = var.clerk_jwks_url
-  clerk_issuer            = var.clerk_issuer
+  name_prefix              = local.name_prefix
+  common_tags              = local.common_tags
+  lambda_build_dir         = "${path.module}/../lambda_build"
+  pipeline_image_uri       = var.pipeline_image_uri
+  results_bucket_name      = module.storage.results_bucket_name
+  results_bucket_arn       = module.storage.results_bucket_arn
+  checkpoints_bucket_name  = module.storage.checkpoints_bucket_name
+  checkpoints_bucket_arn   = module.storage.checkpoints_bucket_arn
+  uploads_bucket_name      = module.storage.upload_bucket_name
+  uploads_bucket_arn       = module.storage.upload_bucket_arn
+  checkpoints_table_name   = module.storage.checkpoints_table_name
+  jobs_table_name          = module.storage.jobs_table_name
+  jobs_table_arn           = module.storage.jobs_table_arn
+  sessions_table_name      = module.storage.sessions_table_name
+  sessions_table_arn       = module.storage.sessions_table_arn
+  usage_table_name         = module.storage.usage_table_name
+  usage_table_arn          = module.storage.usage_table_arn
+  reservations_table_name  = module.storage.reservations_table_name
+  reservations_table_arn   = module.storage.reservations_table_arn
+  orchestrate_queue_arn    = module.queue.orchestrate_queue_arn
+  orchestrate_queue_url    = module.queue.orchestrate_queue_url
+  log_group_name           = module.monitoring.lambda_log_group_name
+  aws_region               = var.aws_region
+  pipeline_secret_arn      = module.secrets.pipeline_secret_arn
+  clerk_jwks_url           = var.clerk_jwks_url
+  clerk_issuer             = var.clerk_issuer
+  clerk_authorized_parties = var.clerk_authorized_parties
 }
 
 # ---------- API Gateway ----------

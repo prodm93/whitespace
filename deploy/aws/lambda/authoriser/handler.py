@@ -11,6 +11,11 @@ logger.setLevel(logging.INFO)
 
 CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL", "")
 CLERK_ISSUER = os.environ.get("CLERK_ISSUER", "")
+CLERK_AUTHORIZED_PARTIES = {
+    origin.strip().rstrip("/")
+    for origin in os.environ.get("CLERK_AUTHORIZED_PARTIES", "").split(",")
+    if origin.strip().rstrip("/")
+}
 
 _jwks_client: PyJWKClient | None = None
 
@@ -28,10 +33,15 @@ def handler(event: dict, context: object) -> dict:
     """API Gateway HTTP API payload format 2.0 authoriser.
 
     Returns simple response: isAuthorized bool + context with user_id and tier. With no
-    issuer configured, every request is refused.
+    issuer or no allowed origin configured, every request is refused. A token whose ``azp``
+    claim is not a text naming an allowed origin is refused, a null value included; a token
+    with no ``azp`` claim is accepted, as Clerk's verification guide allows.
     """
     if not CLERK_ISSUER:
         logger.error("CLERK_ISSUER not configured; the request is refused")
+        return {"isAuthorized": False}
+    if not CLERK_AUTHORIZED_PARTIES:
+        logger.error("CLERK_AUTHORIZED_PARTIES not configured; the request is refused")
         return {"isAuthorized": False}
 
     headers = event.get("headers", {})
@@ -57,6 +67,12 @@ def handler(event: dict, context: object) -> dict:
     except Exception as exc:
         logger.error("Authoriser error: %s", exc)
         return {"isAuthorized": False}
+
+    if "azp" in claims:
+        origin = claims["azp"]
+        if not isinstance(origin, str) or origin not in CLERK_AUTHORIZED_PARTIES:
+            logger.warning("Token from an origin that is not allowed: %s", origin)
+            return {"isAuthorized": False}
 
     user_id = claims.get("sub", "")
     if not user_id:

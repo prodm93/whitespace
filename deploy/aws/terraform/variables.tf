@@ -82,6 +82,29 @@ variable "clerk_issuer" {
   }
 }
 
+variable "clerk_authorized_parties" {
+  description = "Origins allowed to sign in: the addresses the browser shows for the app, no trailing slash, for example https://app.example.com or http://localhost:3000."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.clerk_authorized_parties) > 0
+    error_message = "clerk_authorized_parties must name at least one origin."
+  }
+
+  validation {
+    condition = alltrue([
+      for origin in var.clerk_authorized_parties :
+      startswith(origin, "https://") || can(regex("^http://localhost(:[0-9]+)?$", origin))
+    ])
+    error_message = "Each origin in clerk_authorized_parties must start with https://, or be http://localhost with an optional port."
+  }
+
+  validation {
+    condition     = alltrue([for origin in var.clerk_authorized_parties : !endswith(origin, "/")])
+    error_message = "No origin in clerk_authorized_parties may end with a slash; the browser sends its origin without one."
+  }
+}
+
 # ---------- Pipeline ----------
 
 variable "pipeline_image_uri" {
