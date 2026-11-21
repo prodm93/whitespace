@@ -55,6 +55,11 @@ resource "aws_iam_role_policy" "pipeline_permissions" {
       },
       {
         Effect   = "Allow"
+        Action   = ["bedrock:Rerank"]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
         Action   = ["cloudwatch:PutMetricData"]
         Resource = "*"
       },
