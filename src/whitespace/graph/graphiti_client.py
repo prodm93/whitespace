@@ -1,13 +1,15 @@
 """Graphiti instance lifecycle wrapper.
 
-Builds a ``graphiti_core.Graphiti`` with all three OpenAI-compatible
-components (LLM client, embedder, cross-encoder) explicitly constructed
-from the session config. In BYOK mode these point at OpenRouter's
-API; in SaaS mode they point at a Bedrock-compatible endpoint.
+Builds a ``graphiti_core.Graphiti`` with its three model services (language model,
+embedder, reranker) explicitly constructed from the session config. In BYOK mode they
+are Graphiti's OpenAI-compatible clients pointed at OpenRouter's API. In SaaS mode they
+are Bedrock adapters, signed by the function's own AWS role, with no stored model key.
 """
 
 from __future__ import annotations
 
+import asyncio
+import functools
 import logging
 from typing import Self
 
@@ -24,6 +26,10 @@ from openai import AsyncOpenAI
 
 from whitespace.closing import Closer, close_all
 from whitespace.config import Config
+from whitespace.graph._bedrock_calls import agent_runtime_client, runtime_client
+from whitespace.graph._bedrock_embedder import BedrockEmbedder
+from whitespace.graph._bedrock_llm import BedrockLLMClient
+from whitespace.graph._bedrock_reranker import BedrockReranker
 from whitespace.graph.neo4j_client import Neo4jClient
 
 logger = logging.getLogger(__name__)
@@ -42,6 +48,11 @@ class GraphitiClient:
 
     async def initialise(self) -> None:
         if self._graphiti is not None:
+            return
+
+        if self._config.mode == "saas":
+            llm, embedder, reranker = self._bedrock_components()
+            self._start(self._driver(), llm, embedder, reranker)
             return
 
         api_key = self._config.openrouter_api_key
@@ -105,6 +116,37 @@ class GraphitiClient:
             cross_encoder=cross_encoder,
         )
 
+    def _bedrock_components(self) -> tuple[LLMClient, EmbedderClient, CrossEncoderClient]:
+        """Build the two Bedrock clients and the three adapters over them.
+
+        Each client's close is recorded as soon as the client is built, so a later failure
+        of ``initialise`` still leaves it for ``close``.
+        """
+        config = self._config
+        region = config.aws_region
+        runtime = runtime_client(region)
+        self._http_closers.append(
+            ("Graphiti Bedrock runtime client", functools.partial(asyncio.to_thread, runtime.close))
+        )
+        agent_runtime = agent_runtime_client(region)
+        self._http_closers.append(
+            (
+                "Graphiti Bedrock agent runtime client",
+                functools.partial(asyncio.to_thread, agent_runtime.close),
+            )
+        )
+        llm = BedrockLLMClient(
+            LLMConfig(
+                model=config.graphiti_bedrock_model,
+                small_model=config.graphiti_bedrock_small_model,
+            ),
+            client=runtime,
+            max_output_tokens=config.graphiti_bedrock_max_tokens,
+        )
+        embedder = BedrockEmbedder(runtime, config.graphiti_embedding_model)
+        rerank_arn = f"arn:aws:bedrock:{region}::foundation-model/{config.graphiti_rerank_model}"
+        return llm, embedder, BedrockReranker(agent_runtime, rerank_arn)
+
     async def ensure_indices_and_constraints(self) -> None:
         if self._graphiti is None:
             raise RuntimeError(
@@ -113,17 +155,18 @@ class GraphitiClient:
         await self._graphiti.build_indices_and_constraints()
 
     async def close(self) -> None:
-        """Close Graphiti, then its model, embedder and reranker HTTP clients.
+        """Close Graphiti, then the clients this object built, in the order they were built.
 
-        The handles are cleared first. Every close is attempted, each within its time
-        limit; an interruption of one is raised after the others.
+        The handles are cleared first, so a second close closes nothing. The clients are
+        closed also when there is no Graphiti, after a failed ``initialise``. Every close is
+        attempted, each within its time limit; an interruption of one is raised after the
+        others.
         """
-        if self._graphiti is None:
-            return
         graphiti, http_closers = self._graphiti, self._http_closers
         self._graphiti = None
         self._http_closers = []
-        await close_all([("Graphiti", graphiti.close), *http_closers])
+        closers: list[Closer] = [] if graphiti is None else [("Graphiti", graphiti.close)]
+        await close_all([*closers, *http_closers])
 
     @property
     def graphiti(self) -> Graphiti:

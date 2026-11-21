@@ -47,6 +47,9 @@
 - name: secret-values-not-logged
   tier: critical
   protects: A value of the pipeline secret appears in a log line, in the error text a user sees, or in the chain of an error.
+- name: saas-graphiti-calls-stay-in-aws
+  tier: critical
+  protects: In SaaS mode Graphiti sends user document text to a model service outside AWS, or needs an OpenRouter key.
 
 - name: saas-secrets-loaded
   tier: high

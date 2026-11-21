@@ -48,13 +48,26 @@ class StandInBedrock:
 
     Answers are given in turn and the last one repeats. An answer is a value, an error to
     raise, or a function of the call's keyword arguments. For ``invoke_model`` a value that
-    is not a ``StandInBody`` is sent as the JSON text of a new body.
+    is not a ``StandInBody`` is sent as the JSON text of a new body. ``close`` records
+    ``name`` in ``closes`` when one is given.
     """
 
-    def __init__(self, *answers: Answer) -> None:
+    def __init__(
+        self,
+        *answers: Answer,
+        name: str = "bedrock",
+        closes: Any = None,
+        close_delay: float = 0.0,
+        close_error: BaseException | None = None,
+    ) -> None:
         self.answers = list(answers)
+        self.name = name
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.bodies: list[StandInBody] = []
+        self._closes = closes
+        self._close_delay = close_delay
+        self._close_error = close_error
+        self.close_count = 0
 
     def _answer(self, operation: str, kwargs: dict[str, Any]) -> Any:
         self.calls.append((operation, kwargs))
@@ -77,3 +90,12 @@ class StandInBedrock:
 
     def converse(self, **kwargs: Any) -> Any:
         return self._answer("converse", kwargs)
+
+    def close(self) -> None:
+        self.close_count += 1
+        if self._closes is not None:
+            self._closes.names.append(self.name)
+        if self._close_delay:
+            time.sleep(self._close_delay)
+        if self._close_error is not None:
+            raise self._close_error
