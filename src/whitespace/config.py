@@ -36,6 +36,12 @@ class Config(BaseSettings):
     # Graphiti
     graphiti_namespace: str = "default"
     graphiti_model: str = "openai/gpt-4o-mini"
+    # Placeholder models for low-cost testing. The final allocation is not decided.
+    graphiti_bedrock_model: str = "amazon.nova-micro-v1:0"
+    graphiti_bedrock_small_model: str = "amazon.nova-micro-v1:0"
+    graphiti_embedding_model: str = "amazon.titan-embed-text-v2:0"
+    graphiti_rerank_model: str = "cohere.rerank-v3-5:0"
+    graphiti_bedrock_max_tokens: int = 8192
 
     # SaaS-only: Clerk auth
     clerk_issuer: str = ""
