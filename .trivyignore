@@ -88,6 +88,14 @@ CVE-2026-78410 exp:2027-02-07
 # https://github.com/systemd/systemd/security/advisories/GHSA-jm29-p7hh-vjhv
 CVE-2026-16742 exp:2027-02-07
 
+# openssl, libssl3t64, openssl-provider-legacy 3.5.9-1~deb13u1: an OpenSSL
+# QUIC server keeps a rejected stream's state when the peer resets it first,
+# so a client can grow server memory without bound. Only a QUIC server is
+# affected; neither our code nor its Python packages use QUIC. OpenSSL rates
+# it Low. Debian 13 has no stable fix; fixed upstream in OpenSSL 3.5.10.
+# https://security-tracker.debian.org/tracker/CVE-2026-124709
+CVE-2026-124709 exp:2027-02-07
+
 
 # ============================================================================
 # Terraform IaC misconfigurations: cost-driven or intentional architecture.
