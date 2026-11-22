@@ -7,22 +7,10 @@ import logging
 import aiosqlite
 
 from whitespace.schemas.research import RawFinding
+from whitespace.store._identities import discard_identity, finding_identity
 from whitespace.store._sqlite_rows import _where
 
 logger = logging.getLogger(__name__)
-
-
-def finding_identity(finding: RawFinding) -> tuple[str, str, str]:
-    """Source type, link (or source name when there is no link) and query.
-
-    The retrieval time and the text are not part of it, so a repeated search
-    that returns the same result matches the stored finding.
-    """
-    return (finding.source_type, finding.source_url or finding.source_name, finding.query)
-
-
-def _discard_key(item: dict[str, str]) -> tuple[str, str, str]:
-    return (item.get("title", ""), item.get("description", ""), item.get("reason", ""))
 
 
 class SqliteResearchRowsMixin:
@@ -107,7 +95,7 @@ class SqliteResearchRowsMixin:
                     i.get("domain", "").strip().lower() or None,
                 )
                 for i in items
-                if _discard_key(i) not in stored
+                if discard_identity(i) not in stored
             ]
             await db.executemany(
                 "INSERT INTO discards (run_id, kind, title, description, reason, domain)"
