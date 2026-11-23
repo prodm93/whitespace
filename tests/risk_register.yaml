@@ -108,6 +108,12 @@
 - name: fallback-close-leaves-nothing-kept
   tier: high
   protects: In the fallback mode, kept clients or the loop survive the end of a run.
+- name: selection-ideates-without-a-new-upload
+  tier: high
+  protects: In SaaS, a request with the selected gaps and no new upload is refused for lack of a profile.
+- name: new-profile-documents-never-use-an-older-profile
+  tier: high
+  protects: New profile documents are analysed with an older stored or held profile, with no sign of it.
 - name: interrupted-close-finishes-the-cleanup
   tier: high
   protects: An interrupted close skips the rest of the cleanup and leaves clients open.

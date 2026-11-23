@@ -16,12 +16,21 @@ from _uploads import localise_paths
 
 
 async def _rehydrate(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return the latest persisted gap run for request-2 session priming."""
+    """Return the latest persisted gap run for request-2 session priming.
+
+    The run's stored profile is returned, except when the request stages new profile
+    documents: then the profile is ``None`` and the new documents are extracted.
+    """
     gap_run = await get_store().get_latest_gap_run()
     if gap_run is None:
         return {"profile": None, "domain": "", "needs": [], "gap_run_id": ""}
+    stored = gap_run.profile
+    if stored is None or payload.get("profile_paths"):
+        profile = None
+    else:
+        profile = stored.model_dump(mode="json")
     return {
-        "profile": None,
+        "profile": profile,
         "domain": gap_run.domain or "",
         "needs": [n.model_dump() for n in gap_run.needs],
         "gap_run_id": gap_run.run_id,
