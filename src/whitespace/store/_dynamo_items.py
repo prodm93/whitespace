@@ -20,6 +20,19 @@ def idea_run_pk(owner: str) -> str:
     return f"USER#{owner}#IDEARUN"
 
 
+def gap_run_index_pk(owner: str) -> str:
+    return f"USER#{owner}#GAPRUN#INDEX"
+
+
+def idea_run_index_pk(owner: str) -> str:
+    return f"USER#{owner}#IDEARUN#INDEX"
+
+
+def run_index_item(index_pk: str, run_id: str, run_sk: str) -> dict[str, Any]:
+    """The one index row of a run ID; ``run_sk`` is the sort key of the run's own row."""
+    return {"pk": index_pk, "sk": run_id, "run_sk": run_sk}
+
+
 def findings_pk(owner: str) -> str:
     return f"USER#{owner}#FINDINGS"
 

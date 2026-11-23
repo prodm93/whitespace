@@ -1,4 +1,4 @@
-"""A repeated save in DynamoDB leaves one row for each rejection and finding."""
+"""A repeated save in DynamoDB leaves one run, and one row for each rejection and finding."""
 
 from __future__ import annotations
 
@@ -9,11 +9,24 @@ from typing import Any
 import pytest
 from _fake_sessions_table import install_sessions_table
 
+from whitespace.orchestration._run_records import save_gap_result, save_idea_result
+from whitespace.schemas.gap import UnmetNeed
+from whitespace.schemas.idea import IdeationProposal
 from whitespace.schemas.research import RawFinding
 from whitespace.store.base import SessionStore
 from whitespace.store.dynamo_store import DynamoSessionStore
 from whitespace.store.sqlite_store import SqliteSessionStore
 
+_NEED = UnmetNeed(title="Gap A", description="d", current_state="c", why_unmet="w")
+_OTHER_NEED = UnmetNeed(title="Gap B", description="d", current_state="c", why_unmet="w")
+_PROPOSAL = IdeationProposal(
+    title="Idea X",
+    problem_statement="p",
+    technical_approach="t",
+    why_this_person="y",
+    differentiation_from_prior_art="d",
+    limitations="l",
+)
 _KILL = {"title": "Kill A", "description": "d", "reason": "Covered by US1", "domain": "x"}
 
 
@@ -41,6 +54,46 @@ def store(request: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Sess
         return SqliteSessionStore(tmp_path / "s.db")
     install_sessions_table(monkeypatch)
     return DynamoSessionStore("sessions", "us-east-1", owner="user_a")
+
+
+@pytest.mark.protects("repeated-save-stores-once")
+async def test_a_gap_result_saved_twice_leaves_one_run_and_the_same_rejections(
+    dynamo: DynamoSessionStore,
+) -> None:
+    await save_gap_result(dynamo, "run-1", "energy", [_NEED], [_KILL])
+    after_first = len(await dynamo.list_discards())
+    await save_gap_result(dynamo, "run-1", "energy", [_NEED], [_KILL])
+
+    assert [run.run_id for run in await dynamo.list_gap_runs()] == ["run-1"]
+    assert len(await dynamo.list_discards()) == after_first == 1
+
+
+@pytest.mark.protects("repeated-save-stores-once")
+async def test_an_idea_result_saved_twice_leaves_one_run(dynamo: DynamoSessionStore) -> None:
+    await save_idea_result(dynamo, "idea-1", "run-1", ["Gap A"], [_PROPOSAL], [_KILL])
+    await save_idea_result(dynamo, "idea-1", "run-1", ["Gap A"], [_PROPOSAL], [_KILL])
+
+    assert [run.run_id for run in await dynamo.list_idea_runs()] == ["idea-1"]
+    assert len(await dynamo.list_discards("idea")) == 1
+
+
+async def test_a_second_save_with_changed_needs_leaves_one_run_with_the_new_needs(
+    dynamo: DynamoSessionStore,
+) -> None:
+    await save_gap_result(dynamo, "run-1", "energy", [_NEED])
+    await save_gap_result(dynamo, "run-1", "energy", [_OTHER_NEED])
+
+    runs = await dynamo.list_gap_runs()
+    assert [run.needs for run in runs] == [[_OTHER_NEED]]
+    latest = await dynamo.get_latest_gap_run()
+    assert latest is not None and latest.needs == [_OTHER_NEED]
+
+
+async def test_two_runs_stay_two(dynamo: DynamoSessionStore) -> None:
+    await save_gap_result(dynamo, "run-1", "energy", [_NEED])
+    await save_gap_result(dynamo, "run-2", "energy", [_NEED])
+
+    assert sorted(run.run_id for run in await dynamo.list_gap_runs()) == ["run-1", "run-2"]
 
 
 async def test_equal_rejections_of_two_runs_stay_two(dynamo: DynamoSessionStore) -> None:

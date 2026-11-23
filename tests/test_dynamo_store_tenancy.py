@@ -71,7 +71,10 @@ async def test_gap_runs_are_read_only_by_their_owner(table: FakeSessionsTable) -
     assert await store_a.get_latest_gap_run() == _GAP_RUN
     assert await store_a.get_gap_run("gap-a") == _GAP_RUN
     assert await store_a.get_all_previous_needs() == [_NEED]
-    assert [item["pk"] for item in table.items] == ["USER#user_a#GAPRUN"]
+    assert {item["pk"] for item in table.items} == {
+        "USER#user_a#GAPRUN",
+        "USER#user_a#GAPRUN#INDEX",
+    }
 
 
 @pytest.mark.protects("session-store-partition-per-tenant")
@@ -86,7 +89,10 @@ async def test_idea_runs_are_read_only_by_their_owner(table: FakeSessionsTable) 
     assert await store_a.list_idea_runs() == [_IDEA_RUN]
     assert await store_a.get_idea_run("idea-a") == _IDEA_RUN
     assert await store_a.get_all_previous_proposals() == [_PROPOSAL]
-    assert [item["pk"] for item in table.items] == ["USER#user_a#IDEARUN"]
+    assert {item["pk"] for item in table.items} == {
+        "USER#user_a#IDEARUN",
+        "USER#user_a#IDEARUN#INDEX",
+    }
 
 
 @pytest.mark.protects("session-store-partition-per-tenant")

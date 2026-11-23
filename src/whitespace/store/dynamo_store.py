@@ -38,11 +38,37 @@ class DynamoSessionStore(SessionStore):
         response = await asyncio.to_thread(self._table.query, **kwargs)
         return cast("list[dict[str, Any]]", response.get("Items", []))
 
+    async def _put_run(self, index_pk: str, item: dict[str, Any]) -> None:
+        """Put a run row under the sort key that the run ID's index row holds.
+
+        The first save of a run ID writes the index row; a later save reads it and
+        overwrites the same run row, so a repeated save leaves one run.
+        """
+        from botocore.exceptions import ClientError
+
+        index = items.run_index_item(index_pk, item["run_id"], item["sk"])
+        try:
+            await asyncio.to_thread(
+                self._table.put_item, Item=index, ConditionExpression="attribute_not_exists(pk)"
+            )
+        except ClientError as error:
+            if error.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                raise
+            response = await asyncio.to_thread(
+                self._table.get_item,
+                Key={"pk": index["pk"], "sk": index["sk"]},
+                ConsistentRead=True,
+            )
+            item = {**item, "sk": response["Item"]["run_sk"]}
+        await self._put(item)
+
     async def save_gap_run(self, run: GapRun) -> None:
-        await self._put(items.gap_run_to_item(self._owner, run))
+        item = items.gap_run_to_item(self._owner, run)
+        await self._put_run(items.gap_run_index_pk(self._owner), item)
 
     async def save_idea_run(self, run: IdeaRun) -> None:
-        await self._put(items.idea_run_to_item(self._owner, run))
+        item = items.idea_run_to_item(self._owner, run)
+        await self._put_run(items.idea_run_index_pk(self._owner), item)
 
     async def list_gap_runs(self) -> list[GapRun]:
         rows = await self._query(items.gap_run_pk(self._owner))

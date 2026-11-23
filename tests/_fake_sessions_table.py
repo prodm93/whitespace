@@ -18,9 +18,22 @@ class FakeSessionsTable:
     def __init__(self) -> None:
         self.items: list[dict[str, Any]] = []
 
-    def put_item(self, *, Item: dict[str, Any]) -> None:
-        self.items = [i for i in self.items if (i["pk"], i["sk"]) != (Item["pk"], Item["sk"])]
+    def put_item(self, *, Item: dict[str, Any], ConditionExpression: str | None = None) -> None:
+        if ConditionExpression is not None:
+            assert ConditionExpression == "attribute_not_exists(pk)", "unsupported condition"
+            if any(_key(i) == _key(Item) for i in self.items):
+                raise ClientError(
+                    {"Error": {"Code": "ConditionalCheckFailedException", "Message": "exists"}},
+                    "PutItem",
+                )
+        self.items = [i for i in self.items if _key(i) != _key(Item)]
         self.items.append(dict(Item))
+
+    def get_item(self, *, Key: dict[str, Any], ConsistentRead: bool = False) -> dict[str, Any]:
+        for item in self.items:
+            if _key(item) == _key(Key):
+                return {"Item": dict(item)}
+        return {}
 
     def query(
         self,
