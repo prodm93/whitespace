@@ -10,12 +10,13 @@ import aiosqlite
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
+from whitespace.schemas.profile import ProfessionalProfile
 from whitespace.store.base import GapRun, IdeaRun
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS gap_runs (
     run_id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, needs_json TEXT NOT NULL,
-    domain TEXT
+    domain TEXT, profile_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS idea_runs (
@@ -51,11 +52,12 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("gap_runs", "domain", "domain TEXT"),
     ("raw_findings", "domain", "domain TEXT"),
     ("discards", "domain", "domain TEXT"),
+    ("gap_runs", "profile_json", "profile_json TEXT"),
 )
 
 
 async def ensure_added_columns(db: aiosqlite.Connection) -> None:
-    """Add the columns that tables made before them lack: the domains."""
+    """Add the columns that tables made before them lack: the domains and the run's profile."""
     for table, column, column_def in _ADDED_COLUMNS:
         cursor = await db.execute(f"PRAGMA table_info({table})")
         existing = {row[1] for row in await cursor.fetchall()}
@@ -73,11 +75,13 @@ def _where(conditions: list[tuple[str, Any]]) -> tuple[str, tuple[Any, ...]]:
 
 def row_to_gap_run(row: aiosqlite.Row) -> GapRun:
     needs = [UnmetNeed.model_validate(n) for n in json.loads(row["needs_json"])]
+    profile_json = row["profile_json"]
     return GapRun(
         run_id=row["run_id"],
         timestamp=datetime.fromisoformat(row["timestamp"]).replace(tzinfo=UTC),
         needs=needs,
         domain=row["domain"],
+        profile=ProfessionalProfile.model_validate_json(profile_json) if profile_json else None,
     )
 
 

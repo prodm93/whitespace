@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
+from whitespace.schemas.profile import ProfessionalProfile
 from whitespace.schemas.question import QuestionRecord
 from whitespace.schemas.research import RawFinding
 
@@ -17,6 +18,9 @@ class GapRun(BaseModel):
     timestamp: datetime = Field(..., description="When the run completed")
     needs: list[UnmetNeed] = Field(default_factory=list)
     domain: str | None = Field(default=None, description="Normalised domain string for this run")
+    profile: ProfessionalProfile | None = Field(
+        default=None, description="The profile the run was made with"
+    )
 
 
 class IdeaRun(BaseModel):

@@ -41,11 +41,12 @@ class SqliteSessionStore(SqliteResearchRowsMixin, SqliteQuestionStoreMixin, Sess
         await self._ensure_schema()
         needs_json = json.dumps([n.model_dump() for n in run.needs])
         domain = run.domain.strip().lower() if run.domain else None
+        profile_json = run.profile.model_dump_json() if run.profile is not None else None
         async with aiosqlite.connect(self._db_path) as db:
             await db.execute(
                 "INSERT OR REPLACE INTO gap_runs"
-                " (run_id, timestamp, needs_json, domain) VALUES (?, ?, ?, ?)",
-                (run.run_id, run.timestamp.isoformat(), needs_json, domain),
+                " (run_id, timestamp, needs_json, domain, profile_json) VALUES (?, ?, ?, ?, ?)",
+                (run.run_id, run.timestamp.isoformat(), needs_json, domain, profile_json),
             )
             await db.commit()
 
