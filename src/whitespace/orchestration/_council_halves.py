@@ -46,6 +46,7 @@ class GapHalves:
             "discards": discards,
             "run_id": state["run_id"],
             "domain": state["domain"],
+            "profile": state["profile"],
         }
 
 

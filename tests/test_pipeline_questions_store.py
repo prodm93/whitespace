@@ -54,6 +54,9 @@ def test_questions_are_wired_in_byok_with_a_store_only(
     assert (pipeline._ideation_council._question_gate is not None) is wired
 
 
+_PROFILE = ProfessionalProfile(hard_skills=["pouch cell design"])
+
+
 class _Dedup(FakeDedup):
     async def dedup(self, findings: list[Any]) -> list[Any]:
         return findings
@@ -65,10 +68,12 @@ def _clarify(role: str) -> ProposedQuestion:
     )
 
 
-async def _real_pipeline(tmp_path: Path) -> tuple[Pipeline, SqliteSessionStore, QuestionRuns]:
+async def _real_pipeline(
+    tmp_path: Path, *, ask: bool = True
+) -> tuple[Pipeline, SqliteSessionStore, QuestionRuns]:
     store = SqliteSessionStore(tmp_path / "s.db")
     dedup = _Dedup()
-    router = FakeRouter(gate_response(ask=True, selected=[selection("P1")], ranking=["P1"]))
+    router = FakeRouter(gate_response(ask=ask, selected=[selection("P1")], ranking=["P1"]))
     gate = QuestionGate(MagicMock(), router, dedup, store)  # type: ignore[arg-type]
     ideator = MagicMock(spec=IdeaIdeator)
     ideator.role_name = "idea_ideator_1"
@@ -166,7 +171,7 @@ async def test_a_paused_gap_run_keeps_one_id_through_checkpoint_and_store(tmp_pa
     pipeline, store, runs = await _real_pipeline(tmp_path)
 
     paused = await pipeline.analyse_gaps_with_questions(
-        ProfessionalProfile(), "energy", run_id="job-1", fresh_start=True
+        _PROFILE, "energy", run_id="job-1", fresh_start=True
     )
     assert isinstance(paused, PausedForQuestions)
     question_id = await _check_pause(store, runs, "gap")
@@ -174,5 +179,18 @@ async def test_a_paused_gap_run_keeps_one_id_through_checkpoint_and_store(tmp_pa
         [UserAnswer(question_id=question_id, status="answered", answer="Pouch cells")]
     )
 
-    assert await store.get_gap_run("job-1") is not None
+    stored = await store.get_gap_run("job-1")
+    assert stored is not None and stored.profile == _PROFILE
     assert await store.get_pending_pause() is None
+
+
+async def test_a_gap_run_that_asks_nothing_stores_its_profile(tmp_path: Path) -> None:
+    pipeline, store, _ = await _real_pipeline(tmp_path, ask=False)
+
+    result = await pipeline.analyse_gaps_with_questions(
+        _PROFILE, "energy", run_id="job-1", fresh_start=True
+    )
+
+    assert not isinstance(result, PausedForQuestions)
+    stored = await store.get_gap_run("job-1")
+    assert stored is not None and stored.profile == _PROFILE
