@@ -22,6 +22,7 @@ from whitespace.orchestration._run_records import save_gap_result, save_idea_res
 from whitespace.schemas._question_scoring import compute_outcome_score
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
+from whitespace.schemas.profile import ProfessionalProfile
 from whitespace.schemas.question import QuestionRecord, UserAnswer
 from whitespace.store.base import PendingPause, SessionStore
 
@@ -152,12 +153,14 @@ class QuestionRuns:
 
     async def _save_result(self, stage: Stage, result: dict[str, Any]) -> None:
         if stage == "gap":
+            profile = result.get("profile")
             await save_gap_result(
                 self._store,
                 result["run_id"],
                 result["domain"],
                 [UnmetNeed.model_validate(n) for n in result["needs"]],
                 result["discards"],
+                profile=None if profile is None else ProfessionalProfile.model_validate(profile),
             )
         else:
             await save_idea_result(

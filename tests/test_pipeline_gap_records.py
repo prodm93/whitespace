@@ -7,10 +7,12 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _question_runs_helpers import make_record, make_runs
 
 from whitespace.orchestration.pipeline import Pipeline
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.profile import ProfessionalProfile
+from whitespace.schemas.question import UserAnswer
 from whitespace.store.sqlite_store import SqliteSessionStore
 
 
@@ -67,6 +69,16 @@ async def test_the_stored_run_keeps_the_profile_it_was_made_with(tmp_path: Path)
 
     stored = await store.get_gap_run("run-1")
     assert stored is not None and stored.profile == profile
+
+
+async def test_a_question_run_result_with_no_profile_is_stored_with_none(tmp_path: Path) -> None:
+    runs, store, _, _ = await make_runs(tmp_path, [make_record("q-1")])
+    await runs.start("gap", "job-1", {"run_id": "job-1"})
+
+    await runs.resume([UserAnswer(question_id="q-1", status="answered", answer="Pouch cells")])
+
+    stored = await store.get_gap_run("job-1")
+    assert stored is not None and stored.profile is None
 
 
 async def test_rejections_are_stored_when_no_need_survives(tmp_path: Path) -> None:
