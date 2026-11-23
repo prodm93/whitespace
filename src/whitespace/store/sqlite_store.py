@@ -12,7 +12,7 @@ from whitespace.store._sqlite_questions import SqliteQuestionStoreMixin
 from whitespace.store._sqlite_research_rows import SqliteResearchRowsMixin
 from whitespace.store._sqlite_rows import (
     _SCHEMA,
-    ensure_domain_columns,
+    ensure_added_columns,
     row_to_gap_run,
     row_to_idea_run,
 )
@@ -33,7 +33,7 @@ class SqliteSessionStore(SqliteResearchRowsMixin, SqliteQuestionStoreMixin, Sess
             return
         async with aiosqlite.connect(self._db_path) as db:
             await db.executescript(_SCHEMA)
-            await ensure_domain_columns(db)
+            await ensure_added_columns(db)
         self._initialised = True
         logger.info("SqliteSessionStore: schema ready at %s", self._db_path)
 

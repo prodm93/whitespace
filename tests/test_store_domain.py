@@ -10,7 +10,7 @@ import aiosqlite
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.research import RawFinding
-from whitespace.store._sqlite_rows import _SCHEMA, ensure_domain_columns
+from whitespace.store._sqlite_rows import _SCHEMA, ensure_added_columns
 from whitespace.store.base import GapRun
 from whitespace.store.sqlite_store import SqliteSessionStore
 
@@ -55,7 +55,7 @@ class TestSqliteMigration:
         async def run() -> None:
             async with aiosqlite.connect(db_path) as db:
                 await db.executescript(_SCHEMA)
-                await ensure_domain_columns(db)
+                await ensure_added_columns(db)
                 for table in ("gap_runs", "raw_findings", "discards"):
                     cursor = await db.execute(f"PRAGMA table_info({table})")
                     cols = {row[1] for row in await cursor.fetchall()}
@@ -85,7 +85,7 @@ class TestSqliteMigration:
                 await db.executescript(old_schema)
                 await db.commit()
             async with aiosqlite.connect(db_path) as db:
-                await ensure_domain_columns(db)
+                await ensure_added_columns(db)
                 for table in ("gap_runs", "raw_findings", "discards"):
                     cursor = await db.execute(f"PRAGMA table_info({table})")
                     cols = {row[1] for row in await cursor.fetchall()}

@@ -47,19 +47,19 @@ CREATE TABLE IF NOT EXISTS pending_pauses (
 );
 """
 
-_DOMAIN_COLUMNS: dict[str, str] = {
-    "gap_runs": "domain TEXT",
-    "raw_findings": "domain TEXT",
-    "discards": "domain TEXT",
-}
+_ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("gap_runs", "domain", "domain TEXT"),
+    ("raw_findings", "domain", "domain TEXT"),
+    ("discards", "domain", "domain TEXT"),
+)
 
 
-async def ensure_domain_columns(db: aiosqlite.Connection) -> None:
-    """Add domain column to tables that predate this migration."""
-    for table, column_def in _DOMAIN_COLUMNS.items():
+async def ensure_added_columns(db: aiosqlite.Connection) -> None:
+    """Add the columns that tables made before them lack: the domains."""
+    for table, column, column_def in _ADDED_COLUMNS:
         cursor = await db.execute(f"PRAGMA table_info({table})")
         existing = {row[1] for row in await cursor.fetchall()}
-        if "domain" not in existing:
+        if column not in existing:
             await db.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
     await db.commit()
 
