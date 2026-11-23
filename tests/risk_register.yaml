@@ -121,6 +121,9 @@
 - name: repeated-save-stores-once
   tier: medium
   protects: A repeated save leaves more than one run, or more than one row for a rejection or a finding, or two different ones overwrite each other.
+- name: byok-ideation-after-a-restart
+  tier: medium
+  protects: After a server restart, BYOK refuses ideation for lack of a profile although a stored run has one.
 - name: long-history-read-in-full
   tier: medium
   protects: A store read returns only the first page of a long history, with no error.

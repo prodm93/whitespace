@@ -85,9 +85,12 @@ async def _run_orchestrator(
     domain, doc_paths, keep_findings = app_state.get_pending_ingest()
     store = app_state.get_store()
     gap_run = await store.get_latest_gap_run() if store is not None else None
+    profile_paths = app_state.get_profile_paths()
+    if profile is None and not profile_paths and gap_run is not None:
+        profile = gap_run.profile
     session = AnalysisSession(
         profile=profile,
-        profile_paths=app_state.get_profile_paths(),
+        profile_paths=profile_paths,
         domain=domain,
         doc_paths=doc_paths,
         keep_findings=keep_findings,
