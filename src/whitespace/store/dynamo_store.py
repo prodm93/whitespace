@@ -13,6 +13,8 @@ from whitespace.tenant import require_tenant_id
 
 logger = logging.getLogger(__name__)
 
+_MAX_PAGES = 1000
+
 
 class DynamoSessionStore(SessionStore):
     """DynamoDB-backed session store for SaaS mode, bound to one tenant's partition."""
@@ -27,6 +29,11 @@ class DynamoSessionStore(SessionStore):
         await asyncio.to_thread(self._table.put_item, Item=item)
 
     async def _query(self, pk: str, *, limit: int | None = None) -> list[dict[str, Any]]:
+        """The rows of ``pk`` in descending sort-key order: every page, or the first ``limit``.
+
+        A history longer than ``_MAX_PAGES`` pages raises ``RuntimeError`` rather than being
+        cut short.
+        """
         from boto3.dynamodb.conditions import Key
 
         kwargs: dict[str, object] = {
@@ -35,8 +42,15 @@ class DynamoSessionStore(SessionStore):
         }
         if limit is not None:
             kwargs["Limit"] = limit
-        response = await asyncio.to_thread(self._table.query, **kwargs)
-        return cast("list[dict[str, Any]]", response.get("Items", []))
+        rows: list[dict[str, Any]] = []
+        for _ in range(_MAX_PAGES):
+            response = await asyncio.to_thread(self._table.query, **kwargs)
+            rows.extend(cast("list[dict[str, Any]]", response.get("Items", [])))
+            last_key = response.get("LastEvaluatedKey")
+            if limit is not None or not last_key:
+                return rows
+            kwargs["ExclusiveStartKey"] = last_key
+        raise RuntimeError(f"The history of {pk} has more than {_MAX_PAGES} pages")
 
     async def _put_run(self, index_pk: str, item: dict[str, Any]) -> None:
         """Put a run row under the sort key that the run ID's index row holds.

@@ -13,10 +13,16 @@ def _key(item: dict[str, Any]) -> tuple[Any, Any]:
 
 
 class FakeSessionsTable:
-    """Holds items by ``pk`` and ``sk`` and answers a query on ``pk``, as DynamoDB does."""
+    """Holds items by ``pk`` and ``sk`` and answers a query on ``pk``, as DynamoDB does.
+
+    A query answers at most ``page_size`` rows when one is set, with ``LastEvaluatedKey``
+    when rows are left. ``query_calls`` counts the query calls.
+    """
 
     def __init__(self) -> None:
         self.items: list[dict[str, Any]] = []
+        self.page_size: int | None = None
+        self.query_calls = 0
 
     def put_item(self, *, Item: dict[str, Any], ConditionExpression: str | None = None) -> None:
         if ConditionExpression is not None:
@@ -41,7 +47,9 @@ class FakeSessionsTable:
         KeyConditionExpression: Any,
         ScanIndexForward: bool = True,
         Limit: int | None = None,
+        ExclusiveStartKey: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        self.query_calls += 1
         key, value = KeyConditionExpression.get_expression()["values"]
         assert key.name == "pk", "the store queries on the partition key only"
         rows = sorted(
@@ -49,7 +57,15 @@ class FakeSessionsTable:
             key=lambda i: i["sk"],
             reverse=not ScanIndexForward,
         )
-        return {"Items": rows if Limit is None else rows[:Limit]}
+        if ExclusiveStartKey is not None:
+            start = [_key(i) for i in rows].index(_key(ExclusiveStartKey)) + 1
+            rows = rows[start:]
+        size = min(n for n in (Limit, self.page_size, len(rows)) if n is not None)
+        page = rows[:size]
+        answer: dict[str, Any] = {"Items": page}
+        if len(rows) > size and Limit is None:
+            answer["LastEvaluatedKey"] = {"pk": page[-1]["pk"], "sk": page[-1]["sk"]}
+        return answer
 
     def batch_writer(self, overwrite_by_pkeys: list[str] | None = None) -> _BatchWriter:
         return _BatchWriter(self, overwrite_by_pkeys)
