@@ -8,6 +8,7 @@ from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
 from whitespace.schemas.research import RawFinding
 from whitespace.store import _dynamo_items as items
+from whitespace.store._identities import identity_digest
 from whitespace.store.base import GapRun, IdeaRun
 
 SAMPLE_NEED = UnmetNeed(
@@ -111,10 +112,19 @@ class TestFindingItem:
         item = items.finding_to_item("user_a", "gap-run-1", _finding())
         assert item["run_id"] == "gap-run-1"
 
-    def test_sort_key_starts_with_found_at(self) -> None:
+    def test_found_at_carried_as_own_attribute(self) -> None:
         finding = _finding()
         item = items.finding_to_item("user_a", "gap-run-1", finding)
-        assert item["sk"].startswith(finding.found_at.isoformat())
+        assert item["found_at"] == finding.found_at.isoformat()
+
+    def test_sort_key_is_the_run_id_and_a_digest_of_the_identity(self) -> None:
+        finding = _finding()
+        item = items.finding_to_item("user_a", "gap-run-1", finding)
+        refetched = finding.model_copy(update={"found_at": datetime(2026, 7, 1, tzinfo=UTC)})
+        run_id, digest = item["sk"].rsplit("#", 1)
+        assert run_id == "gap-run-1"
+        assert len(digest) == 64 and set(digest) <= set("0123456789abcdef")
+        assert items.finding_to_item("user_a", "gap-run-1", refetched)["sk"] == item["sk"]
 
 
 class TestDiscardItem:
@@ -175,23 +185,16 @@ class TestSortKeyOrdering:
         later_sk = items.gap_run_to_item("user_a", later)["sk"]
         assert earlier_sk < later_sk
 
-    def test_later_finding_sorts_after_earlier_as_plain_string(self) -> None:
-        earlier = RawFinding(
-            title="t",
-            content="c",
-            source_type="web",
-            source_name="s",
-            query="q",
-            found_at=datetime(2026, 1, 1, tzinfo=UTC),
-        )
-        later = RawFinding(
-            title="t",
-            content="c",
-            source_type="web",
-            source_name="s",
-            query="q",
-            found_at=datetime(2026, 6, 1, tzinfo=UTC),
-        )
-        earlier_sk = items.finding_to_item("user_a", "run", earlier)["sk"]
-        later_sk = items.finding_to_item("user_a", "run", later)["sk"]
-        assert earlier_sk < later_sk
+
+class TestIdentityDigest:
+    def test_parts_split_the_same_two_ways_give_different_digests(self) -> None:
+        first = identity_digest(("web", "a\x1fb", "c"))
+        second = identity_digest(("web", "a", "b\x1fc"))
+        assert first != second
+
+    def test_one_identity_gives_the_same_digest_each_time(self) -> None:
+        assert identity_digest(("web", "a", "c")) == identity_digest(["web", "a", "c"])
+
+    def test_the_digest_is_64_hexadecimal_characters(self) -> None:
+        digest = identity_digest(("paper", "Journal", "q"))
+        assert len(digest) == 64 and set(digest) <= set("0123456789abcdef")

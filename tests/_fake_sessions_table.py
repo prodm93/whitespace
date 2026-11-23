@@ -5,6 +5,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+from botocore.exceptions import ClientError
+
+
+def _key(item: dict[str, Any]) -> tuple[Any, Any]:
+    return (item["pk"], item["sk"])
+
 
 class FakeSessionsTable:
     """Holds items by ``pk`` and ``sk`` and answers a query on ``pk``, as DynamoDB does."""
@@ -32,22 +38,39 @@ class FakeSessionsTable:
         )
         return {"Items": rows if Limit is None else rows[:Limit]}
 
-    def batch_writer(self) -> _BatchWriter:
-        return _BatchWriter(self)
+    def batch_writer(self, overwrite_by_pkeys: list[str] | None = None) -> _BatchWriter:
+        return _BatchWriter(self, overwrite_by_pkeys)
 
 
 class _BatchWriter:
-    def __init__(self, table: FakeSessionsTable) -> None:
+    """Buffers the puts of one batch; two items with one key fail unless they may overwrite."""
+
+    def __init__(self, table: FakeSessionsTable, overwrite_by_pkeys: list[str] | None) -> None:
         self._table = table
+        self._overwrite = overwrite_by_pkeys == ["pk", "sk"]
+        self._buffer: list[dict[str, Any]] = []
 
     def __enter__(self) -> _BatchWriter:
         return self
 
     def __exit__(self, *_exc: object) -> None:
-        return None
+        for item in self._buffer:
+            self._table.put_item(Item=item)
 
     def put_item(self, *, Item: dict[str, Any]) -> None:
-        self._table.put_item(Item=Item)
+        if any(_key(i) == _key(Item) for i in self._buffer):
+            if not self._overwrite:
+                raise ClientError(
+                    {
+                        "Error": {
+                            "Code": "ValidationException",
+                            "Message": "Provided list of item keys contains duplicates",
+                        }
+                    },
+                    "BatchWriteItem",
+                )
+            self._buffer = [i for i in self._buffer if _key(i) != _key(Item)]
+        self._buffer.append(dict(Item))
 
 
 def install_sessions_table(monkeypatch: Any) -> FakeSessionsTable:

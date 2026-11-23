@@ -112,6 +112,9 @@
   tier: high
   protects: An interrupted close skips the rest of the cleanup and leaves clients open.
 
+- name: repeated-save-stores-once
+  tier: medium
+  protects: A repeated save leaves more than one run, or more than one row for a rejection or a finding, or two different ones overwrite each other.
 - name: search-surface-failure-degrades
   tier: medium
   protects: One search source that fails stops the whole run instead of giving no findings from it.

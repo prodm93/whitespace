@@ -7,6 +7,7 @@ from typing import Any
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
 from whitespace.schemas.research import RawFinding
+from whitespace.store._identities import finding_identity, identity_digest
 from whitespace.store.base import GapRun, IdeaRun
 
 DISCARD_KINDS = ("gap", "idea")
@@ -58,8 +59,9 @@ def item_to_idea_run(item: dict[str, Any]) -> IdeaRun:
 def finding_to_item(owner: str, run_id: str, finding: RawFinding) -> dict[str, Any]:
     return {
         "pk": findings_pk(owner),
-        "sk": f"{finding.found_at.isoformat()}#{uuid.uuid4()}",
+        "sk": f"{run_id}#{identity_digest(finding_identity(finding))}",
         "run_id": run_id,
+        "found_at": finding.found_at.isoformat(),
         "payload": finding.model_dump_json(),
     }
 

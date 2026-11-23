@@ -87,7 +87,7 @@ class DynamoSessionStore(SessionStore):
             return
 
         def _write_batch() -> None:
-            with self._table.batch_writer() as batch:
+            with self._table.batch_writer(overwrite_by_pkeys=["pk", "sk"]) as batch:
                 for finding in findings:
                     batch.put_item(Item=items.finding_to_item(self._owner, run_id, finding))
 
@@ -98,6 +98,7 @@ class DynamoSessionStore(SessionStore):
         rows = await self._query(items.findings_pk(self._owner))
         if run_id is not None:
             rows = [r for r in rows if r.get("run_id") == run_id]
+        rows.sort(key=lambda r: r["found_at"], reverse=True)
         return [items.item_to_finding(r) for r in rows]
 
     async def save_discards(self, run_id: str, kind: str, entries: list[dict[str, str]]) -> None:
