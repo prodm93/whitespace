@@ -119,6 +119,10 @@ class AppState:
     def set_profile(self, profile: ProfessionalProfile) -> None:
         self._profile = profile
 
+    def clear_profile(self) -> None:
+        """Drop the held profile, so that new profile documents are extracted before use."""
+        self._profile = None
+
     def get_profile(self) -> ProfessionalProfile:
         if self._profile is None:
             raise ProfileNotReady("Profile has not been extracted yet")

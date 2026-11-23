@@ -23,6 +23,8 @@ def register_handlers(queue: LocalAsyncQueue) -> None:
         profile_paths: list[str] = payload.get("profile_paths", [])
         domain_paths: list[str] = payload.get("domain_paths", [])
 
+        if profile_paths:
+            app_state.clear_profile()
         app_state.set_profile_paths(profile_paths)
 
         all_paths = profile_paths + domain_paths

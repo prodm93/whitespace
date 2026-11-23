@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from whitespace.api.handlers import _run_orchestrator
+from whitespace.api.handlers import _run_orchestrator, register_handlers
 from whitespace.api.state import AppState
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
@@ -59,6 +59,14 @@ class _Pipeline:
         return None
 
 
+class _Queue:
+    def __init__(self) -> None:
+        self.handlers: dict[str, Any] = {}
+
+    def register_handler(self, name: str, handler: Any) -> None:
+        self.handlers[name] = handler
+
+
 async def _state(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, stored: ProfessionalProfile | None
 ) -> AppState:
@@ -97,6 +105,23 @@ async def test_staged_profile_documents_keep_the_stored_profile_out(
     state.set_profile_paths(["uploads/new-cv.pdf"])
     pipeline = _Pipeline()
 
+    result = await _ideate(pipeline)
+
+    assert pipeline.ideated_with == []
+    assert result["reason"] == "Cannot run: no profile."
+
+
+@pytest.mark.protects("new-profile-documents-never-use-an-older-profile")
+async def test_an_ingest_of_profile_documents_drops_the_held_profile(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    state = await _state(monkeypatch, tmp_path, None)
+    state.set_profile(ProfessionalProfile(hard_skills=["held skill"]))
+    queue = _Queue()
+    register_handlers(queue)  # type: ignore[arg-type]
+    pipeline = _Pipeline()
+
+    await queue.handlers["ingest"]("job-1", {"profile_paths": ["uploads/new-cv.pdf"]})
     result = await _ideate(pipeline)
 
     assert pipeline.ideated_with == []
