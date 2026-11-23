@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
 from whitespace.schemas.research import RawFinding
-from whitespace.store._identities import finding_identity, identity_digest
+from whitespace.store._identities import discard_identity, finding_identity, identity_digest
 from whitespace.store.base import GapRun, IdeaRun
 
 DISCARD_KINDS = ("gap", "idea")
@@ -71,10 +70,10 @@ def item_to_finding(item: dict[str, Any]) -> RawFinding:
 
 
 def discard_to_item(owner: str, run_id: str, kind: str, entry: dict[str, str]) -> dict[str, Any]:
-    now = datetime.now(UTC).isoformat()
     return {
         "pk": discard_pk(owner, kind),
-        "sk": f"{now}#{uuid.uuid4()}",
+        "sk": f"{run_id}#{identity_digest(discard_identity(entry))}",
+        "created_at": datetime.now(UTC).isoformat(),
         "run_id": run_id,
         "kind": kind,
         "title": entry.get("title", ""),

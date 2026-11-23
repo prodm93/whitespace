@@ -106,7 +106,7 @@ class DynamoSessionStore(SessionStore):
             return
 
         def _write_batch() -> None:
-            with self._table.batch_writer() as batch:
+            with self._table.batch_writer(overwrite_by_pkeys=["pk", "sk"]) as batch:
                 for entry in entries:
                     batch.put_item(Item=items.discard_to_item(self._owner, run_id, kind, entry))
 
@@ -118,5 +118,5 @@ class DynamoSessionStore(SessionStore):
         rows: list[dict[str, Any]] = []
         for one_kind in kinds:
             rows.extend(await self._query(items.discard_pk(self._owner, one_kind)))
-        rows.sort(key=lambda r: r["sk"], reverse=True)
+        rows.sort(key=lambda r: r["created_at"], reverse=True)
         return [items.item_to_discard(r) for r in rows]

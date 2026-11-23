@@ -1,4 +1,4 @@
-"""A repeated save in DynamoDB leaves one row for each finding."""
+"""A repeated save in DynamoDB leaves one row for each rejection and finding."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from whitespace.schemas.research import RawFinding
 from whitespace.store.base import SessionStore
 from whitespace.store.dynamo_store import DynamoSessionStore
 from whitespace.store.sqlite_store import SqliteSessionStore
+
+_KILL = {"title": "Kill A", "description": "d", "reason": "Covered by US1", "domain": "x"}
 
 
 def _finding(link: str = "https://example.org/1", query: str = "q") -> RawFinding:
@@ -39,6 +41,39 @@ def store(request: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Sess
         return SqliteSessionStore(tmp_path / "s.db")
     install_sessions_table(monkeypatch)
     return DynamoSessionStore("sessions", "us-east-1", owner="user_a")
+
+
+async def test_equal_rejections_of_two_runs_stay_two(dynamo: DynamoSessionStore) -> None:
+    await dynamo.save_discards("run-1", "gap", [_KILL])
+    await dynamo.save_discards("run-2", "gap", [_KILL])
+
+    assert len(await dynamo.list_discards("gap")) == 2
+
+
+async def test_two_equal_rejections_in_one_save_are_stored_once(
+    dynamo: DynamoSessionStore,
+) -> None:
+    await dynamo.save_discards("run-1", "gap", [_KILL, dict(_KILL)])
+
+    assert len(await dynamo.list_discards("gap")) == 1
+
+
+async def test_rejections_are_listed_newest_first(
+    dynamo: DynamoSessionStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    times = iter(datetime(2026, 11, 1, hour, tzinfo=UTC) for hour in range(3))
+
+    class _Clock:
+        @staticmethod
+        def now(_tz: Any) -> datetime:
+            return next(times)
+
+    monkeypatch.setattr("whitespace.store._dynamo_items.datetime", _Clock)
+    await dynamo.save_discards("run-1", "gap", [{**_KILL, "title": "first"}])
+    await dynamo.save_discards("run-2", "gap", [{**_KILL, "title": "second"}])
+    await dynamo.save_discards("run-3", "idea", [{**_KILL, "title": "third"}])
+
+    assert [d["title"] for d in await dynamo.list_discards()] == ["third", "second", "first"]
 
 
 @pytest.mark.protects("repeated-save-stores-once")
@@ -91,3 +126,17 @@ async def test_two_findings_split_the_same_two_ways_are_both_stored_in_two_calls
     await store.save_raw_findings("run-1", [second])
 
     assert _parts(await store.list_raw_findings("run-1")) == _parts([first, second])
+
+
+async def test_two_rejections_split_the_same_two_ways_are_both_stored(
+    store: SessionStore,
+) -> None:
+    pair = [
+        {"title": "a\x1fb", "description": "c", "reason": "r"},
+        {"title": "a", "description": "b\x1fc", "reason": "r"},
+    ]
+
+    await store.save_discards("run-1", "gap", pair)
+
+    stored = sorted((d["title"], d["description"]) for d in await store.list_discards("gap"))
+    assert stored == [("a", "b\x1fc"), ("a\x1fb", "c")]

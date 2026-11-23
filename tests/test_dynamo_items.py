@@ -198,3 +198,12 @@ class TestIdentityDigest:
     def test_the_digest_is_64_hexadecimal_characters(self) -> None:
         digest = identity_digest(("paper", "Journal", "q"))
         assert len(digest) == 64 and set(digest) <= set("0123456789abcdef")
+
+
+class TestDiscardKey:
+    def test_sort_key_is_the_run_id_and_a_digest_and_created_at_is_kept(self) -> None:
+        entry = {"title": "T", "description": "D", "reason": "R"}
+        item = items.discard_to_item("user_a", "r1", "gap", entry)
+        again = items.discard_to_item("user_a", "r1", "gap", dict(entry))
+        assert item["sk"].startswith("r1#") and item["sk"] == again["sk"]
+        assert datetime.fromisoformat(item["created_at"]).tzinfo is not None
