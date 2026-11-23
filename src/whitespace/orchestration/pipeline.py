@@ -147,7 +147,7 @@ class Pipeline(PipelineLifecycleMixin, PipelineQuestionsMixin):
             run_id=run_id,
             run_memory=memory,
         )
-        await save_gap_result(self._store, run_id, domain, needs, discards)
+        await save_gap_result(self._store, run_id, domain, needs, discards, profile=profile)
         return needs
 
     async def ideate(

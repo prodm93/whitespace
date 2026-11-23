@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from whitespace.schemas.gap import UnmetNeed
 from whitespace.schemas.idea import IdeationProposal
+from whitespace.schemas.profile import ProfessionalProfile
 from whitespace.store.base import GapRun, IdeaRun, SessionStore
 
 
@@ -16,8 +17,9 @@ async def save_gap_result(
     domain: str,
     needs: list[UnmetNeed],
     discards: Sequence[dict[str, str]] = (),
+    profile: ProfessionalProfile | None = None,
 ) -> None:
-    """Store a gap run's rejections, then the run itself when it found any need.
+    """Store a gap run's rejections, then the run itself, with its profile, when it found a need.
 
     This is the one place that stores the rejections of a gap council's
     second half. Both writes are safe to repeat for the same run.
@@ -33,6 +35,7 @@ async def save_gap_result(
                 timestamp=datetime.now(UTC),
                 needs=needs,
                 domain=domain.strip().lower(),
+                profile=profile,
             )
         )
 

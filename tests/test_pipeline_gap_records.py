@@ -58,6 +58,17 @@ async def test_needs_and_discards_are_stored_once(tmp_path: Path) -> None:
     assert sorted(d["title"] for d in await store.list_discards("gap")) == ["Kill A", "Kill B"]
 
 
+async def test_the_stored_run_keeps_the_profile_it_was_made_with(tmp_path: Path) -> None:
+    store = SqliteSessionStore(tmp_path / "s.db")
+    profile = ProfessionalProfile(hard_skills=["kiln design"])
+    pipeline = _pipeline(store, ([_need("Heat recovery")], []))
+
+    await pipeline.analyse_gaps(profile, "Energy", run_id="run-1", fresh_start=True)
+
+    stored = await store.get_gap_run("run-1")
+    assert stored is not None and stored.profile == profile
+
+
 async def test_rejections_are_stored_when_no_need_survives(tmp_path: Path) -> None:
     store = SqliteSessionStore(tmp_path / "s.db")
     pipeline = _pipeline(store, ([], [_discard("Kill A")]))
